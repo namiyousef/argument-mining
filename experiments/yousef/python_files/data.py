@@ -20,7 +20,8 @@ class KaggleDataset(Dataset):
         self.inputs = dataframe.text.values
         self.targets = dataframe.labels.values
         if not is_string_dtype(self.inputs): raise TypeError('Text data must be string type')
-        if not is_integer_dtype(self.targets): raise TypeError('Label data must be integer type')
+        # TODO assertion below is bug; not deleting so remember to add correct assertions
+        #if not is_integer_dtype(self.targets): raise TypeError('Label data must be integer type')
 
         # -- prepare tokenizer
         self.tokenizer = tokenizer
