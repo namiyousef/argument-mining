@@ -9,18 +9,18 @@ from torch.utils.data import Dataset, DataLoader
 import pdb
 import torch
 from torch import cuda
+import time
 
-
-train_df = pd.read_csv('/kaggle/input/feedback-prize-2021/train.csv')
-
+s = time.time()
+BASE_PATH = '../data/kaggle/feedback-prize-2021/'
+path_from_base = lambda x: os.path.join(BASE_PATH, x)
+train_df = pd.read_csv(path_from_base('train.csv'))
 test_names, train_texts = [], []
-for f in list(os.listdir('../input/feedback-prize-2021/train')):
+for f in list(os.listdir(path_from_base('train'))):
     test_names.append(f.replace('.txt', ''))
-    train_texts.append(open('../input/feedback-prize-2021/train/' + f, 'r').read())
+    train_texts.append(open(path_from_base(f'train/{f}'), 'r').read())
     
 doc_df = pd.DataFrame({'id': test_names, 'text': train_texts})
-doc_df.head()
-
 #Create entities for each document
 entities = []
 for index,row in doc_df.iterrows():
@@ -36,7 +36,7 @@ for index,row in doc_df.iterrows():
             ent[int(i)] = f"I-{r['discourse_type']}"
         
 
-    entities.append(e)
+    entities.append(ent)
 
 doc_df['elements'] = entities
 
@@ -48,4 +48,7 @@ labels_to_ids = {v:k for k,v in enumerate(output_labels)}
 ids_to_labels = {k:v for k,v in enumerate(output_labels)}
 
 doc_df['labels'] = doc_df['elements'].apply(lambda x: [labels_to_ids[i] for i in x])
-doc_df.head()
+print(doc_df.head())
+for i, (text, label) in doc_df[['text', 'labels']].iterrows():
+    assert len(label) == len(text.split())
+print(time.time() - s)
