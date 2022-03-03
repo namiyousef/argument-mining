@@ -1,15 +1,53 @@
-from torch.utils.data import DataLoader
-import pandas as pd
+from torch.utils.data import DataLoader, Dataset
 import os
 import time
 import numpy as np
+import pandas as pd
+from pandas.api.types import is_integer_dtype, is_string_dtype
+import torch
 
-class KaggleDataLoader:
+class KaggleDataset(Dataset):
     """
     Class for loading data in batches after it has been processed
     """
-    def __init__(self, path_to_data):
-        pass
+    def __init__(self, dataframe, tokenizer, max_length):
+
+        super().__init__()
+
+        # -- prepare data
+        assert sorted(dataframe.columns) == ['labels', 'text'], f"Please make sure input dataframe has the columns (text, labels)"
+        # data must be in the correct format
+        self.inputs = dataframe.text.values
+        self.targets = dataframe.labels.values
+        if not is_string_dtype(self.inputs): raise TypeError('Text data must be string type')
+        if not is_integer_dtype(self.targets): raise TypeError('Label data must be integer type')
+
+        # -- prepare tokenizer
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.inputs)
+
+    def __getitem__(self, index):
+        # self.inputs anf self.targets must be of a type that is indexible as shown
+        inputs = self.inputs[index]
+        targets = self.targets[index]
+
+        inputs = self.tokenizer(
+            # consider parametrising these
+            inputs.split(),
+            is_split_into_words=True, # this means that extra \n should be ignored
+            padding='max_length',
+            truncation=True,
+            max_length=self.max_length
+        )
+
+        inputs = {
+            key: torch.as_tensor(val, dtype=torch.long) for key, val in inputs.items()
+        }
+        targets = torch.as_tensor(targets, dtype=torch.long)
+        return (inputs, targets)
 
 
 class DataProcessor:
@@ -88,6 +126,13 @@ def create_labels_doc_level(path_to_text_dir, path_to_ground_truth):
 
     df_texts.labels = df_texts.apply(lambda x: update_inplace(x), axis=1)
 
+    """df_texts.text = df_texts.text.str.replace('\n', ' ')
+    df_texts.text = df_texts.text.str.replace('\s+', ' ')
+    df_texts.text = df_texts.text.str.replace('(?<=\w) (?=[.,\/#!$%\^&\*;:{}=\-_`~()])', '')"""
+
+    #for i, (text, label) in df_texts[['text', 'labels']].iterrows():
+    #    assert text.split().__len__() == label.__len__(), f'Failed because of size mismatch on id: {i}. Shape mismatch {text.split().__len__(), label.__len__()}'
+
 
     """ids = np.stack(df_texts.range)
     print(ids.shape)
@@ -100,13 +145,42 @@ def create_labels_doc_level(path_to_text_dir, path_to_ground_truth):
 
     df_texts.labels = labels"""
 
-    print(time.time() - s)
-    print(df_texts.labels[df_texts.id == '0A0AA9C21C5D'])
+    return df_texts
 
 
 
 if __name__ == '__main__':
-    PATH = '../../../data/kaggle/feedback-prize-2021/train'
+    """PATH = '../../../data/kaggle/feedback-prize-2021/train'
     FILE_PATH = '../../../data/kaggle/feedback-prize-2021/train.csv'
 
-    create_labels_doc_level(PATH, FILE_PATH)
+    df_texts = create_labels_doc_level(PATH, FILE_PATH)
+    df_texts[['text', 'labels']].to_csv('../../../data/kaggle/df_cleaned.csv')"""
+
+    PATH = '../../../data/kaggle/df_cleaned.csv'
+    df = pd.read_csv(PATH, index_col=0)
+    df.labels = df.labels.apply(lambda x: [int(x_) for x_ in x[1:-1].split(', ')])
+
+    def extend_labels_based_on_tokenizer(words, labels, tokenizer):
+        tokens = []
+        new_labels = []
+
+        for word, label in zip(words.split(), labels):
+            tokenized_word = tokenizer.tokenize(word)
+            l_tokenized = len(tokenized_word)
+            tokens += tokenized_word
+            new_labels += [label] * l_tokenized
+
+        return tokens, new_labels
+
+
+
+    from transformers import BigBirdTokenizer
+
+    tokenizer = BigBirdTokenizer.from_pretrained('google/bigbird-roberta-large')
+
+
+
+    sentence = 'Yousef Nami is from Iran'
+    labels = 'B-PERS I-PERS O O B-Place'
+    sentence = '_You sef _Na mi is from _Ir an'
+    labels = 'B_PERS B-PERS I-PERS I-PERS'
