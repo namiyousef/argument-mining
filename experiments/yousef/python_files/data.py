@@ -44,11 +44,18 @@ class KaggleDataset(Dataset):
             max_length=self.max_length
         )
 
+        word_ids = inputs.word_ids()
+        word_id_mask = [bool(word_id) for word_id in word_ids]
+        word_ids = [word_id for word_id in word_ids if word_id]
+
         inputs = {
             key: torch.as_tensor(val, dtype=torch.long) for key, val in inputs.items()
         }
         targets = torch.as_tensor(targets, dtype=torch.long)
-        return (inputs, targets)
+        expanded_targets = torch.zeros(self.max_length, dtype=torch.long)
+        expanded_targets[word_id_mask] = targets[word_ids]
+
+        return (inputs, expanded_targets)
 
 
 class DataProcessor:
