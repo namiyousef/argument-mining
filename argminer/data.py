@@ -42,7 +42,7 @@ class KaggleDataset(Dataset):
 
         word_ids = inputs.word_ids()
         word_id_mask = [bool(word_id) for word_id in word_ids]
-        word_ids = [word_id for word_id in word_ids if word_id]
+        word_ids = [word_id for word_id in word_ids if word_id is not None]
 
         inputs = {
             key: torch.as_tensor(val, dtype=torch.long) for key, val in inputs.items()
