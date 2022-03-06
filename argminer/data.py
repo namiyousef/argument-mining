@@ -41,7 +41,7 @@ class KaggleDataset(Dataset):
         )
 
         word_ids = inputs.word_ids()
-        word_id_mask = [bool(word_id) for word_id in word_ids]
+        word_id_mask = [word_id is not None for word_id in word_ids]
         word_ids = [word_id for word_id in word_ids if word_id is not None]
 
         inputs = {
