@@ -137,3 +137,8 @@ data
 
 # google cloud
 .tmp.driveupload
+.tmp.drivedownload
+trest
+
+# VS Code
+.vscode
