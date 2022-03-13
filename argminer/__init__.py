@@ -1,2 +1,2 @@
-from argminer import data
+import argminer
 print('Import of ArgMiner successful')
