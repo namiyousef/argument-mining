@@ -52,7 +52,7 @@ def main(model_name, max_length, epochs=5, batch_size=16, save_freq=1, verbose=2
     model = AutoModelForTokenClassification.from_pretrained(model_name, config=config_model)
     optimizer = torch.optim.Adam(params=model.parameters())
 
-    df_texts = pd.read_csv('train_NER.csv')
+    df_texts = pd.read_csv('data/train_NER.csv')
     df_texts.entities = df_texts.entities.apply(lambda x: literal_eval(x))
     df_texts = df_texts.drop('id')
 
