@@ -17,9 +17,7 @@ setup(
         'tqdm',
         'sklearn',
         'protobuf',
-    ],
-    dependency_links=[
-        'git+https://github.com/namiyousef/colab-utils.git@develop'
+        'colabtools@git+https://git@github.com/namiyousef/colab-utils.git'
     ],
     #package_data={}
     packages=find_packages(exclude=('tests*', 'experiments*')),
