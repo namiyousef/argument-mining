@@ -137,3 +137,5 @@ def main(model_name, max_length, epochs=5, batch_size=16, save_freq=1, verbose=2
         torch.save(model.state_dict(), save_path)
         print(f'Model saved at epoch {epoch + 1} at: {save_path}')
 
+if __name__ == '__main__':
+    plac.call(main)
