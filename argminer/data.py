@@ -113,8 +113,8 @@ class BigBirdDataset(Dataset):
 
             return item
         else:
-            targets = encoding.pop('labels')
-            inputs = encoding
+            targets = item.pop('labels')
+            inputs = item
             return inputs, targets
 
     def __len__(self):
