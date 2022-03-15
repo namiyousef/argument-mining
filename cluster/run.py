@@ -31,7 +31,7 @@ else:
     print('CUDA device NOT detected. Using CPU...')
 
 
-@plac.annotatations(
+@plac.annotations(
     model_name=("name of HuggingFace model to use", "positional", None, str),
     max_length=("max number of tokens", "positional", None, int),
     batch_size=("Batch size for training", "option", "b", int),
@@ -54,8 +54,7 @@ def main(model_name, max_length, epochs=5, batch_size=16, save_freq=1, verbose=2
 
     df_texts = pd.read_csv('data/train_NER.csv')
     df_texts.entities = df_texts.entities.apply(lambda x: literal_eval(x))
-    df_texts = df_texts.drop('id')
-
+    df_texts = df_texts.drop('id', axis=1)
     train_set = BigBirdDataset(df_texts, tokenizer, max_length, False)
 
     train_params = {
@@ -66,7 +65,6 @@ def main(model_name, max_length, epochs=5, batch_size=16, save_freq=1, verbose=2
     }
 
     train_loader = DataLoader(train_set, **train_params)
-
     model.to(DEVICE)
     print(f'Model pushed to device: {DEVICE}')
     for epoch in range(epochs):
@@ -117,25 +115,25 @@ def main(model_name, max_length, epochs=5, batch_size=16, save_freq=1, verbose=2
                 )
             start_load = time.time()
 
-            print_message = f'Epoch {epoch + 1}/{epochs} complete. ' \
-                            f'Time taken: {start_load - start_epoch:.3g}. ' \
-                            f'Loss: {training_loss/(i+1): .3g}'
+        print_message = f'Epoch {epoch + 1}/{epochs} complete. ' \
+                        f'Time taken: {start_load - start_epoch:.3g}. ' \
+                        f'Loss: {training_loss/(i+1): .3g}'
 
-            if verbose:
-                print(f'{"-" * len(print_message)}')
-                print(print_message)
-                print(f'{"-" * len(print_message)}')
+        if verbose:
+            print(f'{"-" * len(print_message)}')
+            print(print_message)
+            print(f'{"-" * len(print_message)}')
 
-            if epoch % save_freq == 0:
-                encoded_model_name = encode_model_name(model_name, epoch+1)
-                save_path = f'models/{encoded_model_name}.pt'
-                torch.save(model.state_dict(), save_path)
-                print(f'Model saved at epoch {epoch+1} at: {save_path}')
+        if epoch % save_freq == 0:
+            encoded_model_name = encode_model_name(model_name, epoch+1)
+            save_path = f'models/{encoded_model_name}.pt'
+            torch.save(model.state_dict(), save_path)
+            print(f'Model saved at epoch {epoch+1} at: {save_path}')
 
-        encoded_model_name = encode_model_name(model_name, 'final')
-        save_path = f'models/{encoded_model_name}.pt'
-        torch.save(model.state_dict(), save_path)
-        print(f'Model saved at epoch {epoch + 1} at: {save_path}')
+    encoded_model_name = encode_model_name(model_name, 'final')
+    save_path = f'models/{encoded_model_name}.pt'
+    torch.save(model.state_dict(), save_path)
+    print(f'Model saved at epoch {epoch + 1} at: {save_path}')
 
 if __name__ == '__main__':
     plac.call(main)
