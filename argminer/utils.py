@@ -4,6 +4,41 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import base64
 import torch
+import pandas as pd
+
+# TODO this needs to be moved to a separate package. Perhaps torchutils?
+def _first_appearance_of_unique_item(x):
+    """ Torch function to get the first appearance of a unique item"""
+    unique, inverse = torch.unique(x, sorted=True, return_inverse=True)
+    perm = torch.arange(inverse.size(0), dtype=inverse.dtype, device=inverse.device)
+    inverse, perm = inverse.flip([0]), perm.flip([0])
+    perm = inverse.new_empty(unique.size(0)).scatter_(0, inverse, perm)
+    return perm
+
+
+def _get_label_maps(unique_labels, strategy):
+    unique_labels = [label for label in unique_labels if label != 'Other']
+    labels = ['O']
+    if strategy == 'bio':
+        for label in unique_labels:
+            labels.append(f'B-{label}')
+            labels.append(f'I-{label}')
+    elif strategy == 'bieo':
+        for label in unique_labels:
+            labels.append(f'B-{label}')
+            labels.append(f'I-{label}')
+            labels.append(f'E-{label}')
+    elif strategy == 'bixo':
+        labels.append('X')
+        for label in unique_labels:
+            labels.append(f'B-{label}')
+            labels.append(f'I-{label}')
+    else:
+        raise NotImplementedError(f'Strategy {strategy} has not implementation yet.')
+
+    return pd.DataFrame({
+        'label': labels
+    }).reset_index().rename(columns={'index': 'label_id'})
 
 def kaggle_split():
     """Function to split discourse text as done by Kaggle. See https://www.kaggle.com/c/feedback-prize-2021/discussion/297591 for full details
