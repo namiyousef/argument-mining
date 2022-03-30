@@ -8,7 +8,7 @@ class ArgumentMiningDataset(Dataset):
     """
     Class for loading data in batches and processing it
     """
-    def __init__(self, df_label_map, df_text, tokenizer, max_length, strategy):
+    def __init__(self, df_label_map, df_text, tokenizer, max_length, strategy, is_train=True):
         super().__init__()
 
         assert sorted(df_text.columns) == ['labels', 'text'], f"Please make sure input dataframe has the columns (text, labels)"
@@ -43,18 +43,21 @@ class ArgumentMiningDataset(Dataset):
         self.consider_end = 'e' in strategy_name # TODO make more robust
         self.use_x = 'x' in strategy_name # TODO make more robust
 
-        # create hash table
+        # create hash tables
         self.label_to_id = {
             label: id_ for label, id_ in df_label_map[['label', 'label_id']].values
         }
         self.id_to_label = {
             id_: label for label, id_ in self.label_to_id.items()
         }
+
+
         self.targets = df_text.labels.apply(
             lambda x: [self.label_to_id[label] for label in x]
         ).values
 
 
+        self.is_train = is_train
 
         # -- prepare tokenizer
         self.tokenizer = tokenizer
@@ -62,7 +65,8 @@ class ArgumentMiningDataset(Dataset):
 
     def __len__(self):
         return len(self.inputs)
-
+    # TODO need to add option to separate how CLS, PAD and SEP are labelled
+    # TODO need to add option for ignoring BIXO using attention mask
     def __getitem__(self, index):
         # self.inputs anf self.targets must be of a type that is indexible as shown
         inputs = self.inputs[index]
@@ -80,25 +84,33 @@ class ArgumentMiningDataset(Dataset):
         word_ids = inputs.word_ids()
         word_id_mask = [word_id is not None for word_id in word_ids]
         # TODO maybe this should go in the function?
-        word_ids = [word_id for word_id in word_ids if word_id is not None]
+
+        word_ids_filtered = [word_id for word_id in word_ids if word_id is not None]
+        word_ids_replaced = [word_id if word_id is not None else -1 for word_id in word_ids]
 
         targets = torch.as_tensor(targets, dtype=torch.long)
 
-        labeller = getattr(self, f'_label_{self.strategy_level}')
-        targets = labeller(targets, word_id_mask, word_ids)
+        labeller = getattr(self, f'_label_{self.strategy_level}') # TODO make function call directly
 
-        inputs['word_id_mask'] = word_id_mask
+        targets = labeller(targets, word_id_mask, word_ids_filtered)
+        targets = torch.as_tensor(targets, dtype=torch.long)
 
-        """# TODO need to think about sending things to the GPU, which ones to send
+        inputs['word_ids'] = word_ids_replaced
+        inputs['index'] = torch.as_tensor(index)
+
+        # for training, no need to return word_ids, or word_id_mask
+        # for validation and testing, there is a need to return them!
+
+        # TODO need to think about reading weights in the middle while training?
+        # TODO need to think about sending things to the GPU, which ones to send
         inputs = {
             key: torch.as_tensor(val, dtype=torch.long) for key, val in inputs.items()
         }
-        inputs['doc_ids'] = index  # TODO may have to convert to type long
-        inputs['word_ids'] = word_ids
 
-        targets = torch.as_tensor(targets, dtype=torch.long)
-        expanded_targets = torch.zeros(self.max_length, dtype=torch.long)
-        expanded_targets[word_id_mask] = targets[word_ids]"""
+        #inputs['doc_ids'] = index  # TODO may have to convert to type long
+        #inputs['word_ids'] = word_ids
+
+
 
         return (inputs, targets)
 
@@ -107,13 +119,16 @@ class ArgumentMiningDataset(Dataset):
         expanded_targets[word_id_mask] = targets[word_ids]
         return expanded_targets
 
+    # TODO can any of this be enhance using unique consequitive from torch?
+
     def _label_standard(self, targets, word_id_mask, word_ids):
         expanded_targets = torch.zeros(self.max_length, dtype=torch.long)
+        # TODO call _label_wordLevel here
+
         expanded_targets[word_id_mask] = targets[word_ids]
         word_start_ids = _first_appearance_of_unique_item(torch.as_tensor(word_ids))
         unique_word_ids, word_id_counts = torch.unique(torch.as_tensor(word_ids), return_counts=True)
-        # TODO this does not work for cases with SEP and CLS. Need to add the mapping again using word_id_mask
-        # here define the start and end labels
+
         expanded_targets_with_mask = expanded_targets[word_id_mask]
         for i, (word_start_id, word_id, word_id_count) in enumerate(
                 zip(word_start_ids, unique_word_ids, word_id_counts)):
@@ -134,6 +149,8 @@ class ArgumentMiningDataset(Dataset):
 
         expanded_targets[word_id_mask] = expanded_targets_with_mask
         return expanded_targets
+
+
 class KaggleDataset(Dataset):
     """
     Class for loading data in batches after it has been processed
@@ -173,15 +190,22 @@ class KaggleDataset(Dataset):
         )
 
         word_ids = inputs.word_ids()
-        word_id_mask = [word_id is not None for word_id in word_ids]
-        word_ids = [word_id for word_id in word_ids if word_id is not None]
+        word_id_mask = [word_id is not None for word_id in word_ids] # consider switching mask
+        # to the indices that need to be read
+        word_ids_filtered = [word_id for word_id in word_ids if word_id is not None]
+
+        inputs['word_ids'] = [word_id if word_id is not None else -1 for word_id in word_ids]
+
 
         inputs = {
             key: torch.as_tensor(val, dtype=torch.long) for key, val in inputs.items()
         }
+        # TODO you don't convert these to tensors!
+        inputs['word_id_mask'] = word_id_mask # TODO not agged properly
+
         targets = torch.as_tensor(targets, dtype=torch.long)
         expanded_targets = torch.zeros(self.max_length, dtype=torch.long)
-        expanded_targets[word_id_mask] = targets[word_ids]
+        expanded_targets[word_id_mask] = targets[word_ids_filtered]
 
         return (inputs, expanded_targets)
 
