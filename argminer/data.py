@@ -64,6 +64,8 @@ class ArgumentMiningDataset(Dataset):
             id_: label for label, id_ in self.label_to_id.items()
         }
 
+        self.reduce_map = self.get_reduce_map()
+
         self.targets = df_text.labels.apply(
             lambda x: [self.label_to_id[label] for label in x]
         ).values
@@ -107,8 +109,9 @@ class ArgumentMiningDataset(Dataset):
         targets = labeller(targets, word_id_mask, word_ids_filtered)
         targets = torch.as_tensor(targets, dtype=torch.long)
 
-        inputs['word_ids'] = word_ids_replaced
-        inputs['index'] = torch.as_tensor(index)
+        if not self.is_train:
+            inputs['word_ids'] = word_ids_replaced
+            inputs['index'] = torch.as_tensor(index)
 
         # for training, no need to return word_ids, or word_id_mask
         # for validation and testing, there is a need to return them!
@@ -161,6 +164,19 @@ class ArgumentMiningDataset(Dataset):
 
         expanded_targets[word_id_mask] = expanded_targets_with_mask
         return expanded_targets
+
+    def get_reduce_map(self):
+        reduce_map = {}
+        label_to_id = {}
+        for id_, label in self.id_to_label.items():
+            if label not in ['X', 'O']:
+                label = label.split('-')[1]
+            reduce_map[id_] = label  # uses dict to preserve order
+            label_to_id[label] = label
+        label_to_id = {label: i for i, label in enumerate(label_to_id)}
+        reduce_map = {i: label_to_id[label] for i, label in reduce_map.items()}
+        return reduce_map
+
 
 
 class KaggleDataset(Dataset):
@@ -320,6 +336,8 @@ class DataProcessor:
             raise Exception('Cannot run postprocess before running process')
         elif self.status != 'processed':
             raise Exception('Postprocess method has already been called.')
+        # TODO this is a BUG FIX
+        return self._postprocess
 
     def get_train_data(self):
         if self.status == 'postprocessed':
