@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='ArgMiner',
-    version='0.0.1',
+    version='0.0.2',
     description='',
     author='Yousef Nami',
     author_email='namiyousef@hotmail.com',
