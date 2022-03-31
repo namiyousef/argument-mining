@@ -91,3 +91,4 @@ def get_predStr(df):
         )
         start_id = end_id
     df['predictionString'] = prediction_strings
+    return df
