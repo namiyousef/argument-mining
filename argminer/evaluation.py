@@ -1,5 +1,5 @@
 import torch
-
+import pandas as pd
 
 def test(model, testloader, collect_predictions=False):
 
@@ -60,62 +60,30 @@ def get_word_labels(inputs, outputs, agg_strategy, has_x):
         
     return pred_labels
 
-def get_labels(tensor, return_type):
-    probas, indices = torch.max(tensor, 1)
-    if return_type == 'labels':
-        return indices
-    elif return_type == 'probas':
-        return probas
-    elif return_type == 'both':
-        return (probas, indices)
-
-class Inference:
-
-    def __init__(self, collect_predictions, agg, return_type):
-        self.collect_predictions = collect_predictions
-        self.agg = agg
-        self.return_type = return_type
-
-    def preprocess(self):
-        pass
-
-    def process(self):
-        pass
-
-    def postprocess(self):
-        pass
-
-    def __call__(self, output_tensor):
-        pass
-    
-def inference(outputs, agg=False):
+def get_predictionString(labels, doc_ids):
     """
-    Function that aggregates
-    :param model:
-    :param outputs:
-    :param word_ids:
-    :param agg_strategy:
-    :return:
     """
-    if agg:
-        pass
-
-
-    pass
-
-"""
-Steps of inference:
-- predict using the trained model, this is done in batches
-- aggregate the batches into words, this will lead to differently sized predictions
-- using the aggregated predictions, compare against the input data with predictionString
-"""
-
+    # TODO need to ensure that we are mapping to the correct class names and doc IDs!
+    ids = []
+    classes = []
+    prediction_strings = []
+    for doc_id, label in zip(doc_ids, labels):
+        unique_classes, unique_class_counts = torch.unique_consecutive(label, return_counts=True)
+        start_id = 1
+        for unique_class, unique_class_count in zip(unique_classes, unique_class_counts):
+            ids.append(doc_id.item())
+            classes.append(unique_class.item())
+            end_id = start_id + unique_class_count + 1
+            prediction_strings.append(set(range(start_id, end_id)))
+            start_id = end_id
+    return pd.DataFrame(data={'id': ids, 'class': classes, 'predictionString': prediction_strings})
 
 def evaluate(df_outputs, df_targets):
     # TODO problem of duplicates? Think about this with test cases
     """
     Calculates the F-Score given prediction strings
     """
+
     # -- Constants
     gt, pred = '_gt', '_pred'
 
@@ -124,6 +92,9 @@ def evaluate(df_outputs, df_targets):
     suffixes = (gt, pred)
 
     #    Columns labels
+    gt_id = f'index{gt}'
+    pred_id = f'index{pred}'
+
     overlap_pred_gt = f'overlap{pred}{gt}'  # how much of ground truth in prediction
     overlap_gt_pred = f'overlap{gt}{pred}'  # how much of prediction in ground truth
     pred_col_name = 'predictionString'
@@ -132,10 +103,17 @@ def evaluate(df_outputs, df_targets):
 
     # TODO is this even correct?? Would you not be repeating items??
     # find all combinations
-    # REally really not sure of this assumption...
+    # REally really not sure of this assumption..
+
+    df_targets = df_targets.reset_index()
+    df_outputs = df_outputs.reset_index()
+
     df_targets = df_targets.merge(
-        df_outputs, on=merge_on, suffixes=suffixes
+        df_outputs, on=merge_on, how='outer', suffixes=suffixes
     )
+
+    df_targets[[gt, pred]] = df_targets[[gt, pred]].where(~df_targets[[gt, pred]].isnull(), {-1})
+
     # find intersection and normalise against each item
     df_targets[overlap_pred_gt] = df_targets[[gt, pred]].apply(
         lambda x: len(x[gt].intersection(x[pred])) / len(x[pred]), axis=1
@@ -148,42 +126,49 @@ def evaluate(df_outputs, df_targets):
     df_targets['tp'] = df_targets[[overlap_pred_gt, overlap_gt_pred]].apply(
         lambda x: int(x.overlap_pred_gt >= 0.5 and x.overlap_gt_pred >= 0.5), axis=1
     )
-    df_targets['overlap_sum'] = df_targets.overlap_pred_gt + df_targets.overlap_gt_pred
+    df_targets['overlap_max'] = df_targets[[overlap_pred_gt, overlap_gt_pred]].max(axis=1)
+
     df_targets[pred] = df_targets[pred].apply(lambda x: tuple(x))
     df_targets[gt] = df_targets[gt].apply(lambda x: tuple(x))
 
     # only keep the ones with the highest overall score
-    df_targets_match = df_targets[df_targets['tp'] == 1].groupby(
-        ['id', 'class', pred]
-    ).agg({'overlap_sum': 'max', gt: lambda x: x})
 
-    # need to find TP by class!
-    TP = df_targets_match.shape[0]
+    # I'm not convinced by this tbh? What about cases of perfect match on one but not on the other?
+    # e.g. case when you have 0.5 and 1 and then 0.8 and 1
+    df_targets_match = df_targets[df_targets['tp'] == 1].sort_values('overlap_max', ascending=False).groupby(
+        ['id', 'class', gt]  # group by pred or gt?
+    ).first()
 
-    # find the items that have no match, but also do not have predictionStrings that are matched
-    df_targets_no_match = df_targets[
-        (df_targets['tp'] == 0) & (~df_targets.set_index(['id', 'class', pred]).index.isin(df_targets_match.index))
-        ]
+    TP = df_targets_match.groupby('class')[pred_id].nunique().to_frame('tp').reset_index()
 
-    ids_no_matches = (df_targets_no_match.overlap_pred_gt == 0) & (df_targets_no_match.overlap_gt_pred == 0)
-    # filter out the false positives
-    df_false_positives = df_targets_no_match[
-        ~ids_no_matches
+    df_false_positive = df_targets[
+        # they didn't do this filter?
+        # (df_targets['tp'] == 0) &
+        (~df_targets.set_index(pred_id).index.isin(df_targets_match[pred_id]))
+
     ]
 
-    df_false_negatives = df_targets_no_match[
-        (ids_no_matches) & (~df_targets_no_match.set_index(['id', 'class', gt]).index.isin(
-            df_targets_match.reset_index().set_index(['id', 'class', gt]).index
-        ))
-        ]
+    FP = df_false_positive.groupby('class')[pred_id].nunique().to_frame('fp').reset_index()
 
-    TP = df_targets_match.reset_index().groupby(['id', 'class']).size().to_frame('tp').reset_index()
-    FN = df_false_negatives.groupby(['id', 'class']).size().to_frame('fn').reset_index()
-    FP = df_false_positives.groupby(['id', 'class']).size().to_frame('fp').reset_index()
+    matched_gt_id = df_targets[df_targets['tp'] == 1][gt_id].unique()
+
+    print(df_targets[df_targets[gt_id].isin(matched_gt_id)].sort_values('class'))
+
+    df_false_negative = df_targets[
+        # (df_targets['tp'] == 0) &
+        (~df_targets.set_index(gt_id).index.isin(matched_gt_id))
+    ]
+
+    FN = df_false_negative.groupby('class')[gt_id].nunique().to_frame('fn').reset_index()
+
+    # TP = df_targets_match.reset_index().groupby(['id', 'class']).size().to_frame('tp').reset_index()
+    # FN = df_false_negatives.groupby(['id', 'class']).size().to_frame('fn').reset_index()
+    # FP = df_false_positives.groupby(['id', 'class']).size().to_frame('fp').reset_index()
 
     scores = TP.merge(
         FN.merge(FP, how='outer'), how='outer'
     ).fillna(0)
+    scores = scores.assign(f1=lambda x: x['tp'] / (x['tp'] + 1 / 2 * (x['fp'] + x['fn'])))
+    print(scores)
 
-    # TODO need to apply f1 score
-    return scores
+    return scores['f1'].mean()
