@@ -286,7 +286,6 @@ class BigBirdDataset(Dataset):
     def __len__(self):
         return self.len
 
-
 # -- data processors
 class DataProcessor:
     """
@@ -340,6 +339,14 @@ class DataProcessor:
         if self.dataframe is None:
             raise TypeError('Dataframe is not yet created yet')
         self.dataframe.to_json(path)
+
+    # TODO change: method here for train_test_split
+    def train_test_split(self):
+        """ takes saved dataframe
+        if dataframe in final state
+        df_train, df_test (df_val option)
+        """
+        pass
 
 
 class TUDarmstadtProcessor(DataProcessor):
@@ -480,6 +487,8 @@ class TUDarmstadtProcessor(DataProcessor):
 
         return self
 
+    def train_test_split(self):
+        pass
 
 # -- helpers (may move later)
 def _generate_entity_labels(length, label, add_end=False, add_beg=True):
