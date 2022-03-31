@@ -3,17 +3,8 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import base64
-import torch
 import pandas as pd
 
-# TODO this needs to be moved to a separate package. Perhaps torchutils?
-def _first_appearance_of_unique_item(x):
-    """ Torch function to get the first appearance of a unique item"""
-    unique, inverse = torch.unique(x, sorted=True, return_inverse=True)
-    perm = torch.arange(inverse.size(0), dtype=inverse.dtype, device=inverse.device)
-    inverse, perm = inverse.flip([0]), perm.flip([0])
-    perm = inverse.new_empty(unique.size(0)).scatter_(0, inverse, perm)
-    return perm
 
 
 def _get_label_maps(unique_labels, strategy):
@@ -40,11 +31,8 @@ def _get_label_maps(unique_labels, strategy):
         'label': labels
     }).reset_index().rename(columns={'index': 'label_id'})
 
-def kaggle_split():
-    """Function to split discourse text as done by Kaggle. See https://www.kaggle.com/c/feedback-prize-2021/discussion/297591 for full details
-    :return:
-    """
 
+# TODO these need to move to other packages as well
 def send_job_completion_report(job_name):
 
     SENDER = EMAIL
@@ -86,13 +74,20 @@ def decode_model_name(encoded_model_name):
     model_name = base64.b64decode(encoded_model_name_b).decode('ascii')
     return model_name
 
-def _move(data, device='cpu'):
-    if torch.is_tensor(data):
-        return data.to(device)
-    elif isinstance(data, dict):
-        return {key: tensor.to(device) for key, tensor in data.items()}
-    elif isinstance(data, list):
-        raise NotImplementedError('Currently no support for tensors stored in lists.')
-    else:
-        raise TypeError('Invalid data type.')
-
+def get_predStr(df):
+    # TODO may not need, see about changes!
+    assert all(item in list(df) for item in ['label', 'text', 'doc_id']), "Please use a dataframe with correct columns"
+    prediction_strings = []
+    start_id = 1
+    prev_doc = df.iloc[0].doc_id
+    for (label, text, doc_id) in df[['label', 'text', 'doc_id']].itertuples(index=False):
+        if doc_id != prev_doc:
+            prev_doc = doc_id
+            start_id = 1
+        text_split = text.split()
+        end_id = start_id + len(text_split)
+        prediction_strings.append(
+            [num for num in range(start_id, end_id)]
+        )
+        start_id = end_id
+    df['predictionString'] = prediction_strings
