@@ -1,8 +1,241 @@
 from torch.utils.data import Dataset
 import torch
 from pandas.api.types import is_string_dtype
+from pandas.testing import assert_frame_equal
 
 from argminer.utils import _first_appearance_of_unique_item
+import os
+import pandas as pd
+
+
+class DataProcessor:
+    """
+    Base class for getting data in a standardised form from raw
+    """
+    def __init__(self, path):
+        self.path = path
+        self.status = None
+        self.dataframe = None
+
+    @property
+    def preprocess(self):
+        """ This is pretokenisation cleaning / what is done at reading"""
+        if self.status is not None:
+            raise Exception('Preprocess method has already been called.')
+        return self._preprocess
+
+    @property
+    def process(self):
+        """ This is usually the tokeniser"""
+        if self.status is None:
+            raise Exception('Cannot run process before running preprocess')
+        elif self.status != 'preprocessed':
+            raise Exception('Process method has already been called.')
+
+        return self._process
+
+    @property
+    def postprocess(self):
+        """ This is post tokenisation cleaning"""
+        if self.status is None:
+            raise Exception('Cannot run postprocess before running process')
+        elif self.status != 'processed':
+            raise Exception('Postprocess method has already been called.')
+
+    def get_train_data(self):
+        if self.status == 'postprocessed':
+            return self.dataframe[['text', 'labels']]
+        else:
+            raise Exception('Cannot return train data before postprocessing')
+
+    def get_inference_data(self):
+        pass
+
+    def from_json(self, path):
+        self.dataframe = pd.read_json(path)
+        return self.dataframe
+
+    def save_json(self, path):
+        # ADD warnings about saving? Or modify name to add status
+        if self.dataframe is None:
+            raise TypeError('Dataframe is not yet created yet')
+        self.dataframe.to_json(path)
+
+
+def get_predStr(df):
+    assert all(item in list(df) for item in ['label', 'text', 'doc_id']), "Please use a dataframe with correct columns"
+    prediction_strings = []
+    start_id = 1
+    prev_doc = df.iloc[0].doc_id
+    for (label, text, doc_id) in df[['label', 'text', 'doc_id']].itertuples(index=False):
+        if doc_id != prev_doc:
+            prev_doc = doc_id
+            start_id = 1
+        text_split = text.split()
+        end_id = start_id + len(text_split)
+        prediction_strings.append(
+            [num for num in range(start_id, end_id)]
+        )
+        start_id = end_id
+    df['predictionString'] = prediction_strings
+
+
+
+def _generate_entity_labels(length, label, add_end=False, add_beg=True):
+    """
+    For cases where argument segment is only 1 word long, beginning given preference over end
+    """
+    labels = [f'I-{label}'] if label != 'Other' else ['O']
+    labels *= length
+
+    if add_end:
+        if label != 'Other':
+            labels[-1] = f'E-{label}'
+
+    if add_beg:
+        if label != 'Other':
+            labels[0] = f'B-{label}'
+
+    return labels
+
+class TUDarmstadtProcessor(DataProcessor):
+
+    """
+    Needs to have reading, e.g. doing stuff at reading stage
+
+    Needs to have a step for doing things to the raw data, before labels are creating
+
+    Needs to have a step for creating the labels
+
+    Needs to have a step for making any changes after labels have been created
+    """
+    def __init__(self, path):
+        super().__init__(path)
+
+
+    def _preprocess(self):
+        texts = []
+        annotated_texts = []
+        for file in os.listdir(self.path):
+            essay_num, file_extension = file.split('.')
+            if file_extension == 'ann':
+                with open(os.path.join(self.path, file), 'r') as f:
+                    df_temp = pd.read_csv(f, delimiter='\t', header=None, names=['label_type', 'label', 'text'])
+                    df_temp[['label', 'label_comp1', 'label_comp2']] = df_temp.label.str.split(expand=True)
+                    df_temp['doc_id'] = essay_num
+                    annotated_texts.append(df_temp)
+            elif file_extension == 'txt':
+                with open(os.path.join(self.path, file), 'r') as f:
+                    texts.append((essay_num, f.read()))
+            else:
+                continue
+
+        df_texts = pd.DataFrame.from_records(texts, columns=['doc_id', 'text'])
+        df_annotated = pd.concat(annotated_texts)
+
+        assert sorted(df_annotated.doc_id.unique()) == sorted(df_texts.doc_id)
+
+        ids_argument_segment = df_annotated.label_type.str.startswith('T')
+        df_arguments = df_annotated[ids_argument_segment]
+        df_arguments = df_arguments.rename(columns={'label_comp1': 'span_start', 'label_comp2': 'span_end'}).astype(
+            {'span_start': int, 'span_end': int}
+        )
+        records = []
+        df_arguments = df_arguments.sort_values(['doc_id', 'span_start', 'span_end'])
+        for (doc_id, text) in df_texts.sort_values('doc_id').itertuples(index=False):
+            df_argument = df_arguments[df_arguments.doc_id == doc_id]
+            prev_span = 0
+            for i, (text_segment, span_start, span_end) in enumerate(
+                    df_argument[['text', 'span_start', 'span_end']].itertuples(index=False)):
+                try:
+                    assert text_segment == text[span_start: span_end]
+                except Exception as e:
+                    print(f'Found non-matching segments:{"-"*50}\n\n'
+                          f'{text_segment}\n\n'
+                          f'{text[span_start: span_end]}\n')
+
+                    df_arguments['text'] = df_arguments['text'].where(df_arguments['text'] != text_segment, text[span_start: span_end])
+                    # all the exception were manually checked. These are because of qutoe chars, this is a hot fix.!!!! TODO
+
+                records.append(('O', 'Other', text[prev_span: span_start], prev_span, span_start, doc_id))
+
+                prev_span = span_end
+            records.append(('O', 'Other', text[prev_span:], prev_span, len(text), doc_id))
+
+        df_other = pd.DataFrame.from_records(records, columns=df_arguments.columns)
+
+        df_combined = pd.concat([df_other, df_arguments])
+        df_combined = df_combined.sort_values(['doc_id', 'span_start', 'span_end']).reset_index(drop=True)[['doc_id', 'text', 'label']]
+
+        # TODO move test maybe?
+        assert_frame_equal(
+            df_combined.groupby('doc_id').agg({'text':lambda x: ''.join(x)}).reset_index(),
+            df_texts.sort_values('doc_id').reset_index(drop=True)
+        )
+
+        self.dataframe = df_combined
+        self.status = 'preprocessed'
+
+        return self
+
+    def _process(self, strategy, processors=[]):
+        # processes data to standardised format, adds any extra cleaning steps
+        assert strategy in {'io', 'bio', 'bieo'} # for now
+
+
+        df = self.dataframe.copy()
+
+        for processor in processors:
+            df['text'] = df['text'].apply(processor)
+
+        # add predStr
+        df = get_predStr(df)
+
+        # add labelling strategy
+        label_strat = dict(
+            add_end='e' in strategy,
+            add_beg='b' in strategy
+        )
+        df['label'] = df[['label', 'predictionString']].apply(
+            lambda x: _generate_entity_labels(
+                len(x['predictionString']), x['label'], **label_strat
+            ), axis=1
+        )
+
+        self.dataframe = df
+        self.status = 'processed'
+
+
+        return self
+
+
+    def _postprocess(self):
+        # aggregates data
+
+        df = self.dataframe.copy()
+        df['predictionString'] = df['predictionString'].apply(
+            lambda x: ' '.join([str(item) for item in x])
+        )
+        df['label'] = df['label'].apply(
+            lambda x: ' '.join([str(item) for item in x])
+        )
+
+        df = df.groupby('doc_id').agg({
+            'text':lambda x: ' '.join(x),
+            'predictionString': lambda x: ' '.join(x),
+            'label': lambda x: ' '.join(x)
+        })
+
+        df['label'] = df['label'].str.split()
+        df['predictionString'] = df['predictionString'].str.split().apply(lambda x: [int(x) for x in x])
+
+        df = df.reset_index().rename(columns={'label':'labels'})
+
+        self.dataframe = df
+        self.status = 'postprocessed'
+
+        return self
+
 
 class ArgumentMiningDataset(Dataset):
     """
@@ -50,7 +283,6 @@ class ArgumentMiningDataset(Dataset):
         self.id_to_label = {
             id_: label for label, id_ in self.label_to_id.items()
         }
-
 
         self.targets = df_text.labels.apply(
             lambda x: [self.label_to_id[label] for label in x]
