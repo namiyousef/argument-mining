@@ -8,6 +8,11 @@ from pandas.testing import assert_frame_equal
 import torch
 from torch.utils.data import Dataset
 
+from tqdm import tqdm
+
+import numpy as np
+
+import warnings
 
 # -- private imports
 from argminer.utils import get_predStr
@@ -23,32 +28,45 @@ class ArgumentMiningDataset(Dataset):
     def __init__(self, df_label_map, df_text, tokenizer, max_length, strategy, is_train=True):
         super().__init__()
 
-        # TODO strategy needs updating to include IO!
+
+        # check data in correct format
         assert sorted(df_text.columns) == ['labels', 'text'], f"Please make sure input dataframe has the columns (text, labels)"
+
+        # check strategy is within accepted strategies
+        assert strategy in [
+            'standard_io',
+            'wordLevel_io',
+            'standard_bio',
+            'wordLevel_bio',
+            'standard_bixo',
+            'standard_bieo',
+            'wordLevel_bieo'
+        ], 'Please use a valid strategy'
+
+        # check that label map matches strategy
         assert 'O' in df_label_map.label.values, 'You are missing label "O"'
-        assert strategy in ['standard_bio', 'wordLevel_bio', 'standard_bixo', 'standard_bieo', 'wordLevel_bieo'], 'Please use a valid strategy'
 
-        strategy_level, strategy_name = strategy.split('_') # TODO this will cause a bug
+        strategy_level, strategy_name = strategy.split('_')
 
-        self.strategy_level = strategy_level
-        self.strategy_name = strategy_name
+        labels = df_label_map.label[df_label_map.label.str_contains('-')].apply(lambda x: x[:1])
+        unique_labels = sorted(list(labels.unique()))
 
-        if strategy_name == 'bio':
-            labels = df_label_map.label[df_label_map.label.str.contains('-')].apply(lambda x: x[:1])
-            labels = list(labels.unique())
-            assert 'BI' == ''.join(sorted(labels)), 'You are missing one of labels "B" or "I"'
+        if strategy_name == 'io':
+            assert 'I' == ''.join(unique_labels)
+        elif strategy_name == 'bio':
+            assert 'BI' == ''.join(unique_labels), 'You are missing one of labels "B" or "I"'
         elif strategy_name == 'bieo':
-            labels = df_label_map.label[df_label_map.label.str.contains('-')].apply(lambda x: x[:1])
-            labels = list(labels.unique())
-            assert 'BIE' == ''.join(labels), 'You are missing one of labels "B", "I" or "E"'
+            assert 'BEI' == ''.join(unique_labels), 'You are missing one of labels "B", "I" or "E"'
         elif strategy_name == 'bixo':
             assert 'X' in df_label_map.label.values, 'You are missing label "X"'
-            labels = df_label_map.label[df_label_map.label.str.contains('-')].apply(lambda x: x[:1])
-            labels = list(labels.unique())
-            assert 'BI' == ''.join(sorted(labels)), 'You are missing one of labels "B" or "I"'
+            assert 'BI' == ''.join(unique_labels), 'You are missing one of labels "B" or "I"'
         else:
             raise NotImplementedError(f'Support for labelling strategy {strategy} does not exist yet')
 
+
+
+        self.strategy_level = strategy_level
+        self.strategy_name = strategy_name
 
         self.inputs = df_text.text.values
         if not is_string_dtype(self.inputs): raise TypeError('Text data must be string type')
@@ -77,6 +95,11 @@ class ArgumentMiningDataset(Dataset):
         self.tokenizer = tokenizer
         self.max_length = max_length
 
+
+        # ignore index
+        # TODO add option to add ignore_index to the subtokens as well? This will be a hassle tho
+        self.ignore_index = -100
+
     def __len__(self):
         return len(self.inputs)
     # TODO need to add option to separate how CLS, PAD and SEP are labelled
@@ -100,7 +123,7 @@ class ArgumentMiningDataset(Dataset):
         # TODO maybe this should go in the function?
 
         word_ids_filtered = [word_id for word_id in word_ids if word_id is not None]
-        word_ids_replaced = [word_id if word_id is not None else -1 for word_id in word_ids]
+        word_ids_replaced = [word_id if word_id is not None else self.ignore_index for word_id in word_ids]
 
         targets = torch.as_tensor(targets, dtype=torch.long)
 
@@ -339,32 +362,51 @@ class DataProcessor:
         # TODO this is a BUG FIX
         return self._postprocess
 
-    def get_train_data(self):
-        if self.status == 'postprocessed':
-            return self.dataframe[['text', 'labels']]
-        else:
-            raise Exception('Cannot return train data before postprocessing')
 
-    def get_inference_data(self):
-        pass
 
     def from_json(self, path):
-        self.dataframe = pd.read_json(path)
-        return self.dataframe
+        df = pd.read_json(path)
+        sorted_cols = sorted(list(df.columns))
+        if sorted_cols == ['doc_id', 'label', 'text']:
+            self.dataframe = df
+            self.status = 'preprocessed'
+            return self
+        elif sorted_cols == ['doc_id', 'labels', 'text']:
+            self.dataframe = df
+            self.status = 'postprocessed'
+            return self
+        else:
+            raise Exception('Can only load data at preprocessed or postprocessed stage. '
+                            f'Your data has columns: {sorted_cols}')
 
     def save_json(self, path):
-        # ADD warnings about saving? Or modify name to add status
         if self.dataframe is None:
-            raise TypeError('Dataframe is not yet created yet')
+            raise TypeError('Dataframe is not yet created yet. You must call preprocess')
+        elif self.status == 'preprocessed':
+            pass
+        elif self.status == 'processed':
+            pass
+        elif self.status == 'postprocessed':
+            pass
+
         self.dataframe.to_json(path)
 
-    # TODO change: method here for train_test_split
-    def train_test_split(self):
+        return self
+
+    @property
+    def get_tts(self, ):
         """ takes saved dataframe
         if dataframe in final state
         df_train, df_test (df_val option)
         """
-        pass
+        if self.status != 'postprocessed':
+            raise Exception('Cannot call train test split before postprocessing')
+
+        # TODO rn does not have default behaviour
+        if hasattr(self, '_get_tts'):
+            return self._get_tts
+        else:
+            raise AttributeError(f'Processor {self.__class__.__name__} does not have a "_get_tts" method')
 
 
 class TUDarmstadtProcessor(DataProcessor):
@@ -383,18 +425,20 @@ class TUDarmstadtProcessor(DataProcessor):
 
 
     def _preprocess(self):
+        # TODO note for this that some of the files had to be modified, so might not work out of the box
         texts = []
         annotated_texts = []
-        for file in os.listdir(self.path):
+        path = os.path.join(self.path, 'brat-project-final')
+        for file in os.listdir(path):
             essay_num, file_extension = file.split('.')
             if file_extension == 'ann':
-                with open(os.path.join(self.path, file), 'r') as f:
+                with open(os.path.join(path, file), 'r') as f:
                     df_temp = pd.read_csv(f, delimiter='\t', header=None, names=['label_type', 'label', 'text'])
                     df_temp[['label', 'label_comp1', 'label_comp2']] = df_temp.label.str.split(expand=True)
                     df_temp['doc_id'] = essay_num
                     annotated_texts.append(df_temp)
             elif file_extension == 'txt':
-                with open(os.path.join(self.path, file), 'r') as f:
+                with open(os.path.join(path, file), 'r') as f:
                     texts.append((essay_num, f.read()))
             else:
                 continue
@@ -451,14 +495,13 @@ class TUDarmstadtProcessor(DataProcessor):
         # processes data to standardised format, adds any extra cleaning steps
         assert strategy in {'io', 'bio', 'bieo'} # for now
 
-
         df = self.dataframe.copy()
 
         for processor in processors:
             df['text'] = df['text'].apply(processor)
 
         # add predStr
-        df = get_predStr(df)
+        df = get_predStr(df) # TODO double check start pred string here
 
         # add labelling strategy
         label_strat = dict(
@@ -505,8 +548,68 @@ class TUDarmstadtProcessor(DataProcessor):
 
         return self
 
-    def train_test_split(self):
-        pass
+    def _get_tts(self):
+        # TODO add validation?
+        """
+        Train test split based on the TUDarmstadt dataset tts file
+        :return:
+        """
+        path = os.path.join(self.path, 'train-test-split.csv')
+        df_tts_ids = pd.read_csv(path, delimiter=';')
+        ids_train = df_tts_ids.SET == "TRAIN"
+        ids_test = ~ids_train
+
+        df = self.dataframe.copy()
+        df_train = df[ids_train]
+        df_test = df[ids_test]
+
+        return df_train, df_test
+
+class PersuadeProcessor(DataProcessor):
+
+    def __init__(self, path):
+        super().__init__(path)
+
+    def _preprocess(self):
+        warnings.warn('PersuadeProcessor does not have a preprocessor. '
+                      'Instead the postprocess method will prepare the data end-to-end', stacklevel=2)
+
+        self.status = 'preprocessed'
+        return self
+
+    def _process(self, strategy, processors=[]):
+        warnings.warn('PersuadeProcessor does not have a processor. '
+                      'Instead the postprocess method will prepare the data end-to-end', stacklevel=2)
+        if processors:
+            # TODO need to change how processor work. This is a hotfix because doing this parsing correctly
+            # is difficult due to corrupted discourse_start and end values. See https://www.kaggle.com/competitions/feedback-prize-2021/discussion/297688
+            warnings.warn('PersuadeProcessor does NOT accept any processors at this time.', stacklevel=2)
+
+        # TODO this is for postprocess
+        assert strategy in {'io', 'bio', 'bieo'} # for now
+
+        # add labelling strategy
+        label_strat = dict(
+            add_end='e' in strategy,
+            add_beg='b' in strategy
+        )
+        self.label_strat = label_strat
+
+        self.status = 'processed'
+        return self
+
+    def _postprocess(self):
+        warnings.warn('The postprocess method is behaving in a special way because of data corruption. '
+                      'This behaviour will change in the future.', DeprecationWarning, stacklevel=2)
+
+        label_strat = self.label_strat
+        path_to_text_dir = os.path.join(self.path, 'train')
+        path_to_ground_truth = os.path.join(self.path, 'train.csv')
+
+        df = create_labels_doc_level(path_to_text_dir, path_to_ground_truth, **label_strat)
+
+        self.dataframe = df
+        self.status = 'postprocessed'
 
 # -- helpers (may move later)
 def _generate_entity_labels(length, label, add_end=False, add_beg=True):
@@ -527,6 +630,72 @@ def _generate_entity_labels(length, label, add_end=False, add_beg=True):
     return labels
 
 
+def df_from_text_files(path_to_dir):
+    filenames = [filename for filename in os.listdir(path_to_dir)]
+    records = [(filename.rstrip('.txt'), open(os.path.join(path_to_dir, filename), 'r').read()) for filename in filenames]
+    df = pd.DataFrame.from_records(records, columns=['id', 'text'])
+    return df
+
+def create_labels_doc_level(
+        path_to_text_dir,
+        path_to_ground_truth,
+        add_end=False,
+        add_beg=True
+):
+
+    df_ground_truth = pd.read_csv(path_to_ground_truth)
+
+
+
+    df_ground_truth.predictionstring = df_ground_truth.predictionstring.str.split()
+    df_ground_truth['label_ids'] = df_ground_truth.predictionstring.apply(lambda x: [int(x[0]), int(x[-1])])
+    df_ground_truth['labels'] = df_ground_truth[['discourse_type', 'label_ids']].apply(
+        lambda x:  [
+                       f'B-{x.discourse_type}'
+                   ]*int(add_beg) + [
+            f'I-{x.discourse_type}'
+        ]*(
+                x.label_ids[-1] - x.label_ids[0] - (int(add_beg) + int(add_end) - 1)
+           ) + [
+            f'E-{x.discourse_type}'
+        ]*int(add_end),
+        # len(strategy) - 2. If all three, this is 1. If only I, this is -1, If BI or IE then it's 0
+        # need to substract len(strategy) - 2, so that when we have all 3, it becomes shorter by 1
+        # if we have only I, then it increases by 1. If we have two, then it stays the same
+
+        #[f'B-{x.discourse_type}'] if 'B' in strategy else [] + [f'I-{x.discourse_type}']*(
+        #        x.label_ids[-1] - x.label_ids[0] - ((len(strategy) - 2)) + [f'E-{x.discourse_type}'] if 'E' in strategy else []
+        #),
+        axis=1
+    )
+
+    df_ground_truth['range'] = df_ground_truth.label_ids.apply(lambda x: np.arange(x[0], x[1]+1))
+
+
+    df_texts = df_from_text_files(path_to_text_dir)
+    df_texts.text = df_texts.text.str.strip()
+    df_texts['text_split'] = df_texts.text.str.split()
+    df_texts['labels'] = df_texts.text_split.apply(lambda x: len(x)*['O'])
+    df_texts = df_texts.merge(
+        df_ground_truth.groupby('id').agg({
+            'range': lambda x: np.concatenate(list(x)),
+            'labels': lambda x: np.concatenate(list(x))
+        }).rename(columns={'labels':'labels_temp'}),
+        on='id'
+    )
+
+    def update_inplace(x):
+        ids = x.range
+        new_labels = x.labels_temp
+        labels = np.array(x.labels, dtype=new_labels.dtype)
+        assert len(ids) == len(new_labels)
+        labels[ids] = new_labels
+        return list(labels)
+
+
+    df_texts.labels = df_texts.apply(lambda x: update_inplace(x), axis=1)
+
+    return df_texts
 
 
 
