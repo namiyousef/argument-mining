@@ -363,38 +363,62 @@ class DataProcessor:
         return self._postprocess
 
 
+    def from_json(self, status='postprocessed'):
 
-    def from_json(self, path):
+        assert status in {'preprocessed', 'processed', 'postprocessed'}
+        filename = f'{self.__class__.__name__.split("Processor")[0]}_{status}.json'
+        path = os.path.join(self.path, filename)
+
         df = pd.read_json(path)
-        sorted_cols = sorted(list(df.columns))
-        if sorted_cols == ['doc_id', 'label', 'text']:
-            self.dataframe = df
-            self.status = 'preprocessed'
-            return self
-        elif sorted_cols == ['doc_id', 'labels', 'text']:
-            self.dataframe = df
-            self.status = 'postprocessed'
-            return self
-        else:
-            raise Exception('Can only load data at preprocessed or postprocessed stage. '
-                            f'Your data has columns: {sorted_cols}')
 
-    def save_json(self, path):
-        if self.dataframe is None:
-            raise TypeError('Dataframe is not yet created yet. You must call preprocess')
-        elif self.status == 'preprocessed':
-            pass
-        elif self.status == 'processed':
-            pass
-        elif self.status == 'postprocessed':
-            pass
-
-        self.dataframe.to_json(path)
+        self.dataframe = df
+        self.status = status
 
         return self
 
+    def save_json(self, dir_path=''):
+        # TODO maybe add option for custom file name?
+        filename = f'{self.__class__.__name__.split("Processor")[0]}_{self.status}.json'
+        path = os.path.join(dir_path, filename)
+        if self.dataframe is None:
+            raise TypeError('Dataframe is not yet created yet. You must call preprocess')
+        else:
+            self.dataframe.to_json(path)
+
+        return self
+
+
+    def _default_tts(self, test_size, val_size=None):
+        # TODO test and val sizes relative to initial dataset
+        df = self.dataframe.copy()
+        n_samples = df.shape[0]
+
+        test_size = int(test_size * n_samples)
+        if val_size:
+            val_size = int(val_size * n_samples)
+            assert test_size + val_size <= n_samples, 'total of test and val exceeds data size'
+
+        dfs = {}
+
+        ids = np.arange(n_samples)
+        np.random.shuffle(ids)
+
+        test_ids = ids[:test_size]
+        train_ids = ids[test_size:]
+
+        dfs['test'] = df.loc[test_ids]
+
+        if val_size:
+            val_ids = train_ids[:val_size]
+            train_ids = train_ids[val_size:]
+            dfs['val'] = df.loc[val_ids]
+
+        dfs['train'] = df.loc[train_ids]
+
+        return dfs
+
     @property
-    def get_tts(self, ):
+    def get_tts(self):
         """ takes saved dataframe
         if dataframe in final state
         df_train, df_test (df_val option)
@@ -403,10 +427,10 @@ class DataProcessor:
             raise Exception('Cannot call train test split before postprocessing')
 
         # TODO rn does not have default behaviour
-        if hasattr(self, '_get_tts'):
+        if '_get_tts' in self.__dict__:
             return self._get_tts
         else:
-            raise AttributeError(f'Processor {self.__class__.__name__} does not have a "_get_tts" method')
+            return self._default_tts
 
 
 class TUDarmstadtProcessor(DataProcessor):
@@ -420,7 +444,7 @@ class TUDarmstadtProcessor(DataProcessor):
 
     Needs to have a step for making any changes after labels have been created
     """
-    def __init__(self, path):
+    def __init__(self, path=''):
         super().__init__(path)
 
 
@@ -548,8 +572,8 @@ class TUDarmstadtProcessor(DataProcessor):
 
         return self
 
-    def _get_tts(self):
-        # TODO add validation?
+    def _get_tts(self, val_size=None, **kwargs):
+        # TODO kwargs added to avoid problem when running all processors together
         """
         Train test split based on the TUDarmstadt dataset tts file
         :return:
@@ -559,15 +583,30 @@ class TUDarmstadtProcessor(DataProcessor):
         ids_train = df_tts_ids.SET == "TRAIN"
         ids_test = ~ids_train
 
+        dfs = {}
         df = self.dataframe.copy()
         df_train = df[ids_train]
         df_test = df[ids_test]
+        dfs['test'] = df_test
+        dfs['train'] = df_train
 
-        return df_train, df_test
+        n_samples = df.shape[0]
+        if val_size:
+            val_size = int(val_size * n_samples)
+            n_test_samples = df_test.shape[0]
+            assert val_size + n_test_samples <= n_samples, 'selected val_size is greater than the training set. ' \
+                                                          f'The test set covers {n_test_samples}/{n_samples} of data'
+            ids_train = df_train.index.values
+            ids_val = ids_train[:val_size]
+            ids_train = ids_train[val_size:]
+            dfs['val'] = df_train.loc[ids_val]
+            dfs['train'] = df_train.loc[ids_train]
+
+        return dfs
 
 class PersuadeProcessor(DataProcessor):
 
-    def __init__(self, path):
+    def __init__(self, path=''):
         super().__init__(path)
 
     def _preprocess(self):
@@ -608,8 +647,11 @@ class PersuadeProcessor(DataProcessor):
 
         df = create_labels_doc_level(path_to_text_dir, path_to_ground_truth, **label_strat)
 
+        df = df[['id', 'text', 'labels']].rename(columns={'id':'doc_id'})
+
         self.dataframe = df
         self.status = 'postprocessed'
+        return self
 
 # -- helpers (may move later)
 def _generate_entity_labels(length, label, add_end=False, add_beg=True):
@@ -646,31 +688,15 @@ def create_labels_doc_level(
     df_ground_truth = pd.read_csv(path_to_ground_truth)
 
 
-
     df_ground_truth.predictionstring = df_ground_truth.predictionstring.str.split()
     df_ground_truth['label_ids'] = df_ground_truth.predictionstring.apply(lambda x: [int(x[0]), int(x[-1])])
-    df_ground_truth['labels'] = df_ground_truth[['discourse_type', 'label_ids']].apply(
-        lambda x:  [
-                       f'B-{x.discourse_type}'
-                   ]*int(add_beg) + [
-            f'I-{x.discourse_type}'
-        ]*(
-                x.label_ids[-1] - x.label_ids[0] - (int(add_beg) + int(add_end) - 1)
-           ) + [
-            f'E-{x.discourse_type}'
-        ]*int(add_end),
-        # len(strategy) - 2. If all three, this is 1. If only I, this is -1, If BI or IE then it's 0
-        # need to substract len(strategy) - 2, so that when we have all 3, it becomes shorter by 1
-        # if we have only I, then it increases by 1. If we have two, then it stays the same
-
-        #[f'B-{x.discourse_type}'] if 'B' in strategy else [] + [f'I-{x.discourse_type}']*(
-        #        x.label_ids[-1] - x.label_ids[0] - ((len(strategy) - 2)) + [f'E-{x.discourse_type}'] if 'E' in strategy else []
-        #),
-        axis=1
-    )
-
     df_ground_truth['range'] = df_ground_truth.label_ids.apply(lambda x: np.arange(x[0], x[1]+1))
 
+
+    df_ground_truth['labels'] = df_ground_truth[['discourse_type', 'range']].apply(
+        lambda x: _generate_entity_labels(len(x.range), x.discourse_type, add_end, add_beg),
+        axis=1
+    )
 
     df_texts = df_from_text_files(path_to_text_dir)
     df_texts.text = df_texts.text.str.strip()
