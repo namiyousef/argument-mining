@@ -31,6 +31,6 @@ for dataset, labels in LABELS_DICT.items():
             if 'e' in strategy:
                 new_labels.append(f'E-{label}')
         LABELS_MAP_DICT[dataset][strategy] = pd.DataFrame({
-            'label_id': new_labels,
-            'label': list(range(len(new_labels)))
+            'label_id': list(range(len(new_labels))),
+            'label': new_labels
         })
