@@ -6,6 +6,9 @@ import pandas as pd
 from colabtools.config import DEVICE
 from colabtools.utils import move_to_device
 
+# -- dev imports
+from argminer.config import PREDICTION_STRING_START_ID
+
 def get_word_labels(inputs, outputs, agg_strategy, has_x):
     """
     Function that aggregates from subtokens back to words given an aggregation strategy,
@@ -24,7 +27,10 @@ def get_word_labels(inputs, outputs, agg_strategy, has_x):
     """
     pred_labels = []
     for (predictions, word_ids) in zip(outputs, inputs):
-        mask = word_ids != -1 # TODO double check this across code
+        # ignore items that have non zero labels (e.g. things that should be ignored)
+        # NOTE if ignoring subtokens, will this affect the mapping back? Maybe need separate labels
+        # for CLS, SEP and also subtokens, if wishing to ignore subtokens
+        mask = word_ids >= 0 # TODO double check this across code
 
         # filter out SEP, CLS
         word_ids = word_ids[mask]
@@ -81,7 +87,7 @@ def get_predictionString(labels, doc_ids):
 
     for doc_id, label in zip(doc_ids, labels):
         unique_classes, unique_class_counts = torch.unique_consecutive(label, return_counts=True)
-        start_id = 1 # TODO this defines the start of a predictionString
+        start_id = PREDICTION_STRING_START_ID # TODO this defines the start of a predictionString
         for unique_class, unique_class_count in zip(unique_classes, unique_class_counts):
             ids.append(doc_id.item())
             classes.append(unique_class.item())
@@ -195,6 +201,7 @@ def evaluate(df_outputs, df_targets):
     ).fillna(0)
 
     # calculate macro_f1 score
+    # TODO double check F1 score correct
     scores = scores.assign(f1=lambda x: x['tp'] / (x['tp'] + 1 / 2 * (x['fp'] + x['fn'])))
 
     return scores

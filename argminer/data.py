@@ -8,8 +8,6 @@ from pandas.testing import assert_frame_equal
 import torch
 from torch.utils.data import Dataset
 
-from tqdm import tqdm
-
 import numpy as np
 
 import warnings
@@ -48,7 +46,7 @@ class ArgumentMiningDataset(Dataset):
 
         strategy_level, strategy_name = strategy.split('_')
 
-        labels = df_label_map.label[df_label_map.label.str_contains('-')].apply(lambda x: x[:1])
+        labels = df_label_map.label[df_label_map.label.str.contains('-')].apply(lambda x: x[:1])
         unique_labels = sorted(list(labels.unique()))
 
         if strategy_name == 'io':
@@ -426,8 +424,8 @@ class DataProcessor:
         if self.status != 'postprocessed':
             raise Exception('Cannot call train test split before postprocessing')
 
-        # TODO rn does not have default behaviour
         if '_get_tts' in self.__dict__:
+            # TODO do some of these need to be private?
             return self._get_tts
         else:
             return self._default_tts

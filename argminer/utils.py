@@ -1,9 +1,17 @@
-from argminer.config import EMAIL, EMAIL_PASSWORD, EMAIL_RECIPIENTS
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+# -- public imports
 import base64
+
 import pandas as pd
+
+import smtplib
+
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+# -- private imports
+
+# -- dev imports
+from argminer.config import EMAIL, EMAIL_PASSWORD, EMAIL_RECIPIENTS, PREDICTION_STRING_START_ID
 
 
 
@@ -78,12 +86,12 @@ def get_predStr(df):
     # TODO may not need, see about changes!
     assert all(item in list(df) for item in ['label', 'text', 'doc_id']), "Please use a dataframe with correct columns"
     prediction_strings = []
-    start_id = 1
+    start_id = PREDICTION_STRING_START_ID
     prev_doc = df.iloc[0].doc_id
     for (label, text, doc_id) in df[['label', 'text', 'doc_id']].itertuples(index=False):
         if doc_id != prev_doc:
             prev_doc = doc_id
-            start_id = 1
+            start_id = PREDICTION_STRING_START_ID
         text_split = text.split()
         end_id = start_id + len(text_split)
         prediction_strings.append(
