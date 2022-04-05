@@ -513,6 +513,8 @@ class TUDarmstadtProcessor(DataProcessor):
 
         return self
 
+    # make it possible to run process and postprocess after preprocess as been run!
+
     def _process(self, strategy, processors=[]):
         # processes data to standardised format, adds any extra cleaning steps
         assert strategy in {'io', 'bio', 'bieo'} # for now
