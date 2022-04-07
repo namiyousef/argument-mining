@@ -424,7 +424,7 @@ class DataProcessor:
         if self.status != 'postprocessed':
             raise Exception('Cannot call train test split before postprocessing')
 
-        if '_get_tts' in self.__dict__:
+        if hasattr(self, '_get_tts'):#'_get_tts' in self.__dict__:
             # TODO do some of these need to be private?
             return self._get_tts
         else:
