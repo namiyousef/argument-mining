@@ -142,3 +142,7 @@ trest
 
 # VS Code
 .vscode
+
+# cluster stuff
+TMPDIR
+*.sh
