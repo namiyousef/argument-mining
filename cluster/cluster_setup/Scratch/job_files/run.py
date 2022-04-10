@@ -108,7 +108,7 @@ def main(dataset, strategy, model_name, max_length, test_size, batch_size, epoch
             df_dict = processor.get_tts(test_size=test_size)
 
         df_train = df_dict.get('train')[['text', 'labels']] # TODO standardise this, so that you don't need to apply this..
-        df_test = df_dict.get('test')[['text', 'labels']].head(10) # TODO delete this
+        df_test = df_dict.get('test')[['text', 'labels']]
 
     except Exception as e: # TODO granularise errors
         raise Exception(f'Error occurred during data processing and splitting. Full logs: {e}')
@@ -181,7 +181,6 @@ def main(dataset, strategy, model_name, max_length, test_size, batch_size, epoch
                     #TODO add metric support
                 )
             start_load = time.time()
-            break # TODO remove this
         print_message = f'Epoch {epoch + 1}/{epochs} complete. ' \
                         f'Time taken: {start_load - start_epoch:.3g}. ' \
                         f'Loss: {training_loss/(i+1): .3g}'
@@ -197,7 +196,7 @@ def main(dataset, strategy, model_name, max_length, test_size, batch_size, epoch
             save_path = f'models/{encoded_model_name}'
             model.save_pretrained(save_path)
             print(f'Model saved at epoch {epoch+1} at: {save_path}')
-        break # TODO remove this
+
     encoded_model_name = encode_model_name(model_name, 'final')
     save_path = f'models/{encoded_model_name}'
     model.save_pretrained(save_path)
