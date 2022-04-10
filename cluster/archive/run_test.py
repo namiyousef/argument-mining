@@ -126,6 +126,10 @@ def main(model_name, max_length, epochs=5, batch_size=16, save_freq=1, verbose=2
 
         if epoch % save_freq == 0:
             encoded_model_name = encode_model_name(model_name, epoch+1)
+            # TODO
+            # - at the beginning of loop create models dir if not eixst
+            # - fix saving using .save_pretrained()
+            # - make the save path global_var?
             save_path = f'models/{encoded_model_name}.pt'
             torch.save(model.state_dict(), save_path)
             print(f'Model saved at epoch {epoch+1} at: {save_path}')
