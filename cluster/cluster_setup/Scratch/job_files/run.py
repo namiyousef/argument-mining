@@ -60,9 +60,10 @@ TEST_SIZE = 0.3
     batch_size=("Batch size for training", "option", "b", int),
     epochs=("Number of epochs to train for", "option", "e", int),
     save_freq=("How frequently to save model, in epochs", "option", None, int),
-    verbose=("Set model verbosity", "option", None, int)
+    verbose=("Set model verbosity", "option", None, int),
+    run_inference=("Flag to run inference or not", "option", 'i', bool)
 )
-def main(dataset, strategy, model_name, max_length, test_size, batch_size, epochs, save_freq, verbose):
+def main(dataset, strategy, model_name, max_length, test_size, batch_size, epochs, save_freq, verbose, run_inference):
     """
     Function to run models as a script. This function expects the following directory structure:
     - cwd (usually $TMPDIR on cluster)
@@ -107,7 +108,7 @@ def main(dataset, strategy, model_name, max_length, test_size, batch_size, epoch
             df_dict = processor.get_tts(test_size=test_size)
 
         df_train = df_dict.get('train')[['text', 'labels']] # TODO standardise this, so that you don't need to apply this..
-        df_test = df_dict.get('test')[['text', 'labels']]
+        df_test = df_dict.get('test')[['text', 'labels']].head(10) # TODO delete this
 
     except Exception as e: # TODO granularise errors
         raise Exception(f'Error occurred during data processing and splitting. Full logs: {e}')
@@ -203,10 +204,10 @@ def main(dataset, strategy, model_name, max_length, test_size, batch_size, epoch
     print(f'Model saved at epoch {epoch + 1} at: {save_path}')
 
     # load trained model
-    trained_model = AutoModelForTokenClassification.from_pretrained(save_path)
-
-    df_metrics, df_scores = inference(trained_model, test_loader)
-    df_scores.to_json('scores.json')
+    if run_inference:
+        trained_model = AutoModelForTokenClassification.from_pretrained(save_path)
+        df_metrics, df_scores = inference(trained_model, test_loader)
+        df_scores.to_json('scores.json')
 
 
 

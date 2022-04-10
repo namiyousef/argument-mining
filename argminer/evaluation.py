@@ -294,7 +294,8 @@ def inference(model, testloader, metrics=[]):
             total_metrics.append(df_metrics)
             total_scores.append(df_scores)
 
-    df_metrics_total = pd.concat(total_metrics)
-    df_scores_total = pd.concat(total_scores)
+    df_metrics_total = pd.concat(total_metrics) # TODO what does the index here mean?
+    df_scores_total = pd.concat(total_scores).reset_index(drop=True)
+    # TODO add a reduce operation on inference
 
     return df_metrics_total, df_scores_total

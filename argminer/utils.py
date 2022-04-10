@@ -12,7 +12,7 @@ from email.mime.multipart import MIMEMultipart
 # -- private imports
 
 # -- dev imports
-from argminer.config import EMAIL, EMAIL_PASSWORD, EMAIL_RECIPIENTS, PREDICTION_STRING_START_ID
+from argminer.config import EMAIL, EMAIL_PASSWORD, EMAIL_RECIPIENTS, PREDICTION_STRING_START_ID, LABELS_MAP_DICT
 
 
 
@@ -59,8 +59,10 @@ def send_job_completion_report(job_name):
     TEST_SIZE = os.environ.get('TEST_SIZE')
     DATASET = os.environ.get('DATASET')
     STRATEGY = os.environ.get('STRATEGY')
+    RUN_INFERENCE = os.environ.get('RUN_INFERENCE')
 
     subject = f'JOB {job_name}: {JOB_STATUS}'
+
     mail_content = f'''
     JOB PARAMETERS:
     ---------------
@@ -75,6 +77,26 @@ def send_job_completion_report(job_name):
     BATCH_SIZE: {BATCH_SIZE}
     VERBOSE: {VERBOSE}
     SAVE_FREQ: {SAVE_FREQ}
+    '''
+    if RUN_INFERENCE:
+        strat_level, strat_label = STRATEGY.split('_')
+        df_label_map = LABELS_MAP_DICT[DATASET][strat_label]
+        df_scores = pd.read_json('scores.json')
+        df_label_map = df_label_map.merge(
+            df_scores.groupby('class').mean().reset_index(), how='left', left_on='label_id', right_on='class'
+        ).set_index('label')[['f1']]
+
+        macro_f1 = df_label_map['f1'].mean()
+        macro_f1_nan = df_label_map['f1'].fillna(0).mean()
+        mail_content += f'''
+    INFERENCE RESULTS:
+    ------------------
+    macro_f1: {macro_f1}
+    macro_f1 with nan: {macro_f1_nan}
+
+    DETAILED RESULTS:
+    -----------------
+    {df_label_map.to_string()}
     '''
 
     # Setup the MIME
