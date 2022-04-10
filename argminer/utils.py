@@ -1,4 +1,5 @@
 # -- public imports
+import os
 import base64
 
 import pandas as pd
@@ -47,10 +48,33 @@ def send_job_completion_report(job_name):
     SENDER_PASSWORD = EMAIL_PASSWORD
     RECIEVER = EMAIL_RECIPIENTS
 
+    # email parameters
+    JOB_STATUS = 'SUCCESS' if os.path.exists('scores.json') else 'FAILED'
+    MODEL_NAME = os.environ.get('MODEL_NAME')
+    MAX_LENGTH = os.environ.get('MAX_LENGTH')
+    EPOCHS = os.environ.get('EPOCHS')
+    BATCH_SIZE = os.environ.get('BATCH_SIZE')
+    VERBOSE = os.environ.get('VERBOSE')
+    SAVE_FREQ = os.environ.get('SAVE_FREQ')
+    TEST_SIZE = os.environ.get('TEST_SIZE')
+    DATASET = os.environ.get('DATASET')
+    STRATEGY = os.environ.get('STRATEGY')
 
-    subject = f'JOB {job_name} COMPLETE'
-    mail_content = '''
-    JOB COMPLETION REPORT
+    subject = f'JOB {job_name}: {JOB_STATUS}'
+    mail_content = f'''
+    JOB PARAMETERS:
+    ---------------
+    MODEL_NAME: {MODEL_NAME}
+    MAX_LENGTH: {MAX_LENGTH}
+
+    DATASET: {DATASET}
+    STRATEGY: {STRATEGY}
+    TEST_SIZE: {TEST_SIZE}
+
+    EPOCHS: {EPOCHS}
+    BATCH_SIZE: {BATCH_SIZE}
+    VERBOSE: {VERBOSE}
+    SAVE_FREQ: {SAVE_FREQ}
     '''
 
     # Setup the MIME

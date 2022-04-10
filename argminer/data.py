@@ -199,7 +199,6 @@ class ArgumentMiningDataset(Dataset):
         return reduce_map
 
 
-
 class KaggleDataset(Dataset):
     """
     Class for loading data in batches after it has been processed
@@ -323,6 +322,7 @@ class BigBirdDataset(Dataset):
     def __len__(self):
         return self.len
 
+
 # -- data processors
 class DataProcessor:
     """
@@ -387,6 +387,7 @@ class DataProcessor:
 
 
     def _default_tts(self, test_size, val_size=None):
+        # TODO need to add a fixed seed here...
         # TODO test and val sizes relative to initial dataset
         df = self.dataframe.copy()
         n_samples = df.shape[0]
@@ -573,6 +574,9 @@ class TUDarmstadtProcessor(DataProcessor):
         return self
 
     def _get_tts(self, val_size=None, **kwargs):
+        # TODO this will cause a bug when running if you do load from json
+        # because it will NOT be able to see the train_test_split ids...
+        # This needs reworking / thinking!
         # TODO kwargs added to avoid problem when running all processors together
         """
         Train test split based on the TUDarmstadt dataset tts file
