@@ -386,7 +386,7 @@ class DataProcessor:
         return self
 
 
-    def _default_tts(self, test_size, val_size=None):
+    def _default_tts(self, test_size, val_size=None,random_seed=0 ):
         # TODO need to add a fixed seed here...
         # TODO test and val sizes relative to initial dataset
         df = self.dataframe.copy()
@@ -398,6 +398,7 @@ class DataProcessor:
             assert test_size + val_size <= n_samples, 'total of test and val exceeds data size'
 
         dfs = {}
+        np.random.seed(random_seed) 
 
         ids = np.arange(n_samples)
         np.random.shuffle(ids)
