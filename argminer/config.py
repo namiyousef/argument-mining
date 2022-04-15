@@ -8,7 +8,7 @@ EMAIL_RECIPIENTS = os.environ.get('EMAIL_RECIPIENTS', EMAIL)
 
 # -- argument mining
 PREDICTION_STRING_START_ID = 0
-
+MAX_NORM = 10
 # -- label maps
 # TODO automate these...
 LABELS_DICT = dict(

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='ArgMiner',
-    version='0.0.7',
+    version='0.0.9',
     description='',
     author='Yousef Nami',
     author_email='namiyousef@hotmail.com',
@@ -17,8 +17,10 @@ setup(
         'tqdm',
         'sklearn',
         'protobuf',
-        'colab-dev-tools@git+https://git@github.com/namiyousef/colab-utils.git',
-        'mlutils@git+https://git@github.com/namiyousef/ml-utils.git'
+        'colab-dev-tools',
+        'matplotlib',
+        #'colab-dev-tools@git+https://git@github.com/namiyousef/colab-utils.git',
+        'mlutils@git+https://git@github.com/namiyousef/ml-utils.git@develop',
         #'pip install torch==1.7.1+cu101 torchvision==0.8.2+cu101 torchaudio==0.7.2 -f https://download.pytorch.org/whl/torch_stable.html'
     ],
     #package_data={}

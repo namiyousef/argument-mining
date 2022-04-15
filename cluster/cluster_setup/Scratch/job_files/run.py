@@ -17,6 +17,7 @@ This notebook should form the core skeleton of the 'run' function
 #    base
 import os
 import gc
+import json
 import time
 import warnings
 
@@ -36,6 +37,9 @@ import plac
 
 # -- private imports
 
+#    ml-utils
+from mlutils.torchtools.metrics import FScore
+
 #    colab-dev-tools
 from colabtools.utils import move_to_device, get_gpu_utilization
 from colabtools.config import DEVICE
@@ -44,7 +48,7 @@ from colabtools.config import DEVICE
 from argminer.data import ArgumentMiningDataset, TUDarmstadtProcessor, PersuadeProcessor
 from argminer.evaluation import inference
 from argminer.utils import encode_model_name
-from argminer.config import LABELS_MAP_DICT
+from argminer.config import LABELS_MAP_DICT, MAX_NORM
 
 
 # -- globals
@@ -135,6 +139,20 @@ def main(dataset, strategy, model_name, max_length, test_size, batch_size, epoch
         os.makedirs('models')
         print('models directory created!')
 
+
+    metrics = [FScore(average='macro')]
+    scores = {
+        'scores': {
+            metric.__class__.__name__: [] for metric in metrics
+        },
+        'epoch_scores': {
+            metric.__class__.__name__: [] for metric in metrics
+        },
+        'epoch_batch_ids': {
+            metric.__class__.__name__: [] for metric in metrics
+        }
+    }
+
     model.to(DEVICE)
     print(f'Model pushed to device: {DEVICE}')
     for epoch in range(epochs):
@@ -163,9 +181,18 @@ def main(dataset, strategy, model_name, max_length, test_size, batch_size, epoch
             training_loss += loss.item()
 
             # backward pass
-            optimizer.zero_grad()
+
+            torch.nn.utils.clip_grad_norm_(
+                parameters=model.parameters(), max_norm=MAX_NORM
+            )
+
             loss.backward()
             optimizer.step()
+
+            # metrics
+            for metric in metrics:
+                score = metric(outputs, targets)
+                scores['scores'][metric.__class__.__name__].append(score.item())
 
             del targets, inputs, loss, outputs
             gc.collect()
@@ -175,15 +202,29 @@ def main(dataset, strategy, model_name, max_length, test_size, batch_size, epoch
 
             if verbose > 1:
                 print(
-                    f'Batch {i + 1} complete. Time taken: load({start_train - start_load:.3g}), '
-                    f'train({end_train - start_train:.3g}), total({end_train - start_load:.3g}). '
+                    f'Batch {i + 1} complete. '
+                    f'Time taken: load({start_train - start_load:.3g}),'
+                    f'train({end_train - start_train:.3g}),'
+                    f'total({end_train - start_load:.3g}). '
                     f'GPU util. after train: {gpu_util}. '
+                    f'Metrics: {" ".join([f"{metric_name}({score_list[-1]:.3g})" for metric_name, score_list in scores["scores"].items()])}'
                     #TODO add metric support
                 )
             start_load = time.time()
+            # TODO remove break clause
+            if i == 3:
+                break
+
+        for metric in metrics:
+            score = scores['scores'][metric.__class__.__name__][:i+1]
+            avg_score = sum(score)/len(score)
+            scores['epoch_scores'][metric.__class__.__name__].append(avg_score)
+            scores['epoch_batch_ids'][metric.__class__.__name__].append(i)
+
         print_message = f'Epoch {epoch + 1}/{epochs} complete. ' \
                         f'Time taken: {start_load - start_epoch:.3g}. ' \
-                        f'Loss: {training_loss/(i+1): .3g}'
+                        f'Loss: {training_loss/(i+1): .3g}. ' \
+                        f'Metrics: {" ".join([f"{metric_name}({score_list[-1]:.3g})" for metric_name, score_list in scores["epoch_scores"].items()])}'
 
         if verbose:
             print(f'{"-" * len(print_message)}')
@@ -201,6 +242,10 @@ def main(dataset, strategy, model_name, max_length, test_size, batch_size, epoch
     save_path = f'models/{encoded_model_name}'
     model.save_pretrained(save_path)
     print(f'Model saved at epoch {epoch + 1} at: {save_path}')
+
+    with open('training_scores.json', 'w') as f:
+        json.dump(scores, f)
+        print('Saved scores.')
 
     # load trained model
     if run_inference:

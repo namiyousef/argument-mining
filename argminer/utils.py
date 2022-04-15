@@ -1,5 +1,7 @@
 # -- public imports
+import io
 import os
+import json
 import base64
 
 import pandas as pd
@@ -8,7 +10,9 @@ import smtplib
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
 
+import matplotlib.pyplot as plt
 # -- private imports
 
 # -- dev imports
@@ -78,7 +82,7 @@ def send_job_completion_report(job_name):
     VERBOSE: {VERBOSE}
     SAVE_FREQ: {SAVE_FREQ}
     '''
-    if RUN_INFERENCE:
+    if RUN_INFERENCE and JOB_STATUS == 'SUCCESS':
         strat_level, strat_label = STRATEGY.split('_')
         df_label_map = LABELS_MAP_DICT[DATASET][strat_label]
         df_scores = pd.read_json('scores.json')
@@ -99,6 +103,27 @@ def send_job_completion_report(job_name):
     {df_label_map.to_string()}
     '''
 
+    with open('training_scores.json', 'r') as f:
+        scores_dict = json.load(f)
+
+    epoch_f_scores = scores_dict['epoch_scores']['FScore']
+    epoch_batch_ids = scores_dict['epoch_batch_ids']['FScore']
+    f_scores = scores_dict['scores']['FScore']
+
+    batches = range(len(f_scores))
+    plt.plot(batches, f_scores)
+    plt.plot(epoch_batch_ids, epoch_f_scores, 'or')
+
+
+    plt.xlabel('Time')
+    plt.ylabel('FScore')
+
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png')
+    buffer.seek(0)
+    img_data = buffer.read()
+
+
     # Setup the MIME
     message = MIMEMultipart()
     message['From'] = SENDER
@@ -107,6 +132,7 @@ def send_job_completion_report(job_name):
 
     # The body and the attachments for the mail
     message.attach(MIMEText(mail_content, 'plain'))
+    message.attach(MIMEImage(img_data))
 
     # Create SMTP session for sending the mail
     session = smtplib.SMTP('smtp.gmail.com', 587)  # use gmail with port
