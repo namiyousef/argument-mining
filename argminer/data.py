@@ -86,6 +86,9 @@ class ArgumentMiningDataset(Dataset):
             lambda x: [self.label_to_id[label] for label in x]
         ).values
 
+        # TODO padding not given label -100? Double check
+        # TODO maybe also double check -1 ?
+
 
         self.is_train = is_train
 
@@ -151,17 +154,14 @@ class ArgumentMiningDataset(Dataset):
         return (inputs, targets)
 
     def _label_wordLevel(self, targets, word_id_mask, word_ids):
-        expanded_targets = torch.zeros(self.max_length, dtype=torch.long)
+        expanded_targets = torch.ones(self.max_length, dtype=torch.long) * self.ignore_index
         expanded_targets[word_id_mask] = targets[word_ids]
         return expanded_targets
 
     # TODO can any of this be enhance using unique consequitive from torch?
 
     def _label_standard(self, targets, word_id_mask, word_ids):
-        expanded_targets = torch.zeros(self.max_length, dtype=torch.long)
-        # TODO call _label_wordLevel here
-
-        expanded_targets[word_id_mask] = targets[word_ids]
+        expanded_targets = self._label_wordLevel(targets, word_id_mask, word_ids)
         word_start_ids = unique_first(torch.as_tensor(word_ids))
         unique_word_ids, word_id_counts = torch.unique(torch.as_tensor(word_ids), return_counts=True)
 
