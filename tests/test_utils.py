@@ -1,25 +1,49 @@
 import unittest
+
+from argminer.utils import get_predStr, _get_label_maps
 import pandas as pd
 from pandas.testing import assert_frame_equal
 from itertools import product
-from argminer.config import LABELS_MAP_DICT, PREDICTION_STRING_START_ID
 
+class TestUtils(unittest.TestCase):
 
-class TestConfig(unittest.TestCase):
+    def test_get_prediction_string(self):
 
-    def test_label_map_dict(self):
+        texts = [
+                'Hi my name is Yousef',
+                'Hi my\n name is Yousef',
+                'Hi my name\n is Yousef',
+                ' Hi  my name is Joe' # extra space example
+            ]
+        df_input = pd.DataFrame(dict(
+            text=texts,
+        )).assign(doc_id=list(range(len(texts))), label='Other')
 
-        # -- configuration
-        datasets = ['TUDarmstadt', 'Persuade']
-        labelling_schemes = ['io', 'bio', 'bieo', 'bixo']
+        df_expected = df_input.copy().assign(predictionString=[
+            [0, 1, 2, 3, 4],
+            [0, 1, 2, 3, 4],
+            [0, 1, 2, 3, 4],
+            [0, 1, 2, 3, 4]
+        ])
 
-        inputs = {
-            f'{dataset}_{labelling_scheme}': (dataset, labelling_scheme) for dataset, labelling_scheme in product(
-                datasets, labelling_schemes
-            )
+        df_output = get_predStr(df_input)
+
+        assert_frame_equal(df_expected, df_output)
+
+    def test_get_label_maps(self):
+        strategies = ['io', 'bio', 'bieo', 'bixo']
+        unique_labels_dict = dict(
+            TUDarmstadt=['MajorClaim', 'Claim', 'Premise'],
+            Persuade=['Lead', 'Position', 'Claim', 'Counterclaim', 'Rebuttal', 'Evidence', 'Concluding Statement']
+        )
+
+        test_params = {
+            f'{dataset}_{strategy}': dict(
+                unique_labels=unique_labels_dict[dataset], strategy=strategy
+            ) for (dataset, strategy) in product(unique_labels_dict, strategies)
         }
 
-        # -- test labelling schemes
+        # -- test
 
         expected_outputs = dict(
             TUDarmstadt_io=pd.DataFrame(dict(
@@ -83,18 +107,9 @@ class TestConfig(unittest.TestCase):
             ))
         )
 
-        for configuration, (dataset, labelling_scheme) in inputs.items():
-            expected_output = expected_outputs[configuration]
-            output = LABELS_MAP_DICT[dataset][labelling_scheme]
-
-            assert_frame_equal(expected_output, output)
-
-    def test_constants(self):
-
-        assert PREDICTION_STRING_START_ID == 0
-        
+        for configuration, expected_output in expected_outputs.items():
+            param = test_params[configuration]
+            output = _get_label_maps(**param)
+            assert_frame_equal(output, expected_output)
 
 
-
-if __name__ == '__main__':
-    unittest.main()
