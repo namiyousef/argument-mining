@@ -517,11 +517,17 @@ class TUDarmstadtProcessor(DataProcessor):
 
     # make it possible to run process and postprocess after preprocess as been run!
 
-    def _process(self, strategy, processors=[]):
+    def _process(self, strategy, processors=[], split='all', **split_params):
         # processes data to standardised format, adds any extra cleaning steps
         assert strategy in {'io', 'bio', 'bieo'} # for now
+        assert split in {'all', 'train', 'test'}
 
-        df = self.dataframe.copy()
+        if split == 'all':
+            df = self.dataframe.copy()
+        else:
+            df_dict = self.get_tts(**split_params)
+            df = df_dict[split]
+            warnings.warn(f'Getting data for split={split} with params {split_params}', UserWarning, stacklevel=2)
 
         for processor in processors:
             df['text'] = df['text'].apply(processor)
@@ -687,11 +693,20 @@ class PersuadeProcessor(DataProcessor):
         self.status = 'preprocessed'
         return self
     
-    def _process(self, strategy, processors=[]):
+    def _process(self, strategy, processors=[], split='all', **split_params):
+        assert split in {'all', 'train', 'test'}
         # processes data to standardised format, adds any extra cleaning steps
         assert strategy in {'io', 'bio', 'bieo'} # for now
 
-        df = self.dataframe.copy()
+        # TODO imrpove this
+        if split == 'all':
+            df = self.dataframe.copy()
+        else:
+            df_dict = self.get_tts(**split_params)
+            df = df_dict[split]
+            warnings.warn(f'Getting data for split={split} with params {split_params}', UserWarning, stacklevel=2)
+
+
 
         for processor in processors:
             df['text'] = df['text'].apply(processor)
