@@ -130,8 +130,8 @@ def main(dataset, strategy, model_name, max_length, test_size, batch_size, epoch
     try:
         train_set = ArgumentMiningDataset(df_label_map, df_train, tokenizer, max_length, strategy)
         test_set = ArgumentMiningDataset(df_label_map, df_test, tokenizer, max_length, strategy, is_train=False)
-        train_loader = DataLoader(train_set, batch_size=batch_size)
-        test_loader = DataLoader(test_set, batch_size=batch_size)
+        train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+        test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=True)
     except Exception as e:
         raise Exception(f'Error occured during dataset/loader creation. Full logs {e}')
 
