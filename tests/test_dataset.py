@@ -80,7 +80,7 @@ class TestDataset(unittest.TestCase):
             if strategy in expected_output:
                 dataset = ArgumentMiningDataset(label_maps[strategy], text_dfs[strategy], tokenizer, max_length, strategy)
                 for (inputs, targets) in dataset:
-                    targets = targets[inputs['word_id_mask']]
+                    targets = targets[targets != -100]
                     expected_targets = torch.as_tensor(expected_output[strategy])
                     assert (targets == expected_targets).all(), f'assertion failed for strategy: {strategy}:\n{targets}\n{expected_targets}'
 
