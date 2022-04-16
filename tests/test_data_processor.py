@@ -23,7 +23,6 @@ class TestDataProcessor(unittest.TestCase):
     def test_base_processor(self):
         logger = TestLogger()
 
-
         logger.log('Test the preproc, proc, postproc cannot be called in incorrect order')
 
         # define dummy subclass to test superclass features
