@@ -423,8 +423,8 @@ class DataProcessor:
         if dataframe in final state
         df_train, df_test (df_val option)
         """
-        if self.status != 'postprocessed':
-            raise Exception('Cannot call train test split before postprocessing')
+        #if self.status != 'postprocessed':
+        #    raise Exception('Cannot call train test split before postprocessing')
 
         if hasattr(self, '_get_tts'):#'_get_tts' in self.__dict__:
             # TODO do some of these need to be private?
