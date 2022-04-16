@@ -7,6 +7,9 @@ from argminer.config import LABELS_MAP_DICT, PREDICTION_STRING_START_ID
 
 class TestConfig(unittest.TestCase):
 
+    def test_to_fail(self):
+        assert False
+
     def test_label_map_dict(self):
 
         # -- configuration
