@@ -33,7 +33,7 @@ class ArgumentMiningDataset(Dataset):
         # check strategy is within accepted strategies
         assert strategy in [
             'standard_io',
-            'wordLevel_io',
+            'wordLevel_io', # consider deprecating wordLevel_io as it is the same as standard!
             'standard_bio',
             'wordLevel_bio',
             'standard_bixo',
@@ -660,6 +660,7 @@ class PersuadeProcessor(DataProcessor):
 
 # -- helpers (may move later)
 def _generate_entity_labels(length, label, add_end=False, add_beg=True):
+    # TODO can this get length=0 as input? (this is a pipeline / integration test)
     """
     For cases where argument segment is only 1 word long, beginning given preference over end
     """

@@ -23,7 +23,10 @@ from argminer.config import EMAIL, EMAIL_PASSWORD, EMAIL_RECIPIENTS, PREDICTION_
 def _get_label_maps(unique_labels, strategy):
     unique_labels = [label for label in unique_labels if label != 'Other']
     labels = ['O']
-    if strategy == 'bio':
+    if strategy == 'io':
+        for label in unique_labels:
+            labels.append(f'I-{label}')
+    elif strategy == 'bio':
         for label in unique_labels:
             labels.append(f'B-{label}')
             labels.append(f'I-{label}')
@@ -155,12 +158,11 @@ def decode_model_name(encoded_model_name):
     return model_name
 
 def get_predStr(df):
-    # TODO may not need, see about changes!
     assert all(item in list(df) for item in ['label', 'text', 'doc_id']), "Please use a dataframe with correct columns"
     prediction_strings = []
     start_id = PREDICTION_STRING_START_ID
     prev_doc = df.iloc[0].doc_id
-    for (label, text, doc_id) in df[['label', 'text', 'doc_id']].itertuples(index=False):
+    for (text, doc_id) in df[['text', 'doc_id']].itertuples(index=False):
         if doc_id != prev_doc:
             prev_doc = doc_id
             start_id = PREDICTION_STRING_START_ID

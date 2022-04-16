@@ -208,12 +208,8 @@ def main(dataset, strategy, model_name, max_length, test_size, batch_size, epoch
                     f'total({end_train - start_load:.3g}). '
                     f'GPU util. after train: {gpu_util}. '
                     f'Metrics: {" ".join([f"{metric_name}({score_list[-1]:.3g})" for metric_name, score_list in scores["scores"].items()])}'
-                    #TODO add metric support
                 )
             start_load = time.time()
-            # TODO remove break clause
-            if i == 3:
-                break
 
         for metric in metrics:
             score = scores['scores'][metric.__class__.__name__][:i+1]
