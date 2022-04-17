@@ -650,7 +650,7 @@ class PersuadeProcessor(DataProcessor):
         df = df.sort_values(['doc_id','pred_str_start_id'])
         prev_doc = df.iloc[0].doc_id
         gd_end = -1
-        time_record = time.time()
+        
         for row in df.itertuples(index=False):
 
             if row.doc_id != prev_doc:
