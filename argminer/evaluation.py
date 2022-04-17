@@ -1,5 +1,6 @@
 # -- public imports
 import torch
+import warnings
 import pandas as pd
 
 # -- private imports
@@ -25,6 +26,20 @@ def get_word_labels(inputs, outputs, agg_strategy, has_x):
     :returns: list of shortened tensors corresponding to each word
     :rtype: list
     """
+    prediction_shape = outputs[0].shape
+    if len(prediction_shape) > 1:
+        feature_dim = prediction_shape[-1]
+    else:
+        feature_dim = 1
+        if outputs.dtype == torch.int64 and agg_strategy != 'first':
+            raise ValueError('agg_strategy must be "first" if aggregating targets vector.')
+
+    # TODO add a warning about targets NOT being compatible with non_first aggs and that doing so will break it!
+    if has_x and agg_strategy != 'first':
+        warnings.warn(
+            f'agg_strategy="{agg_strategy}" with has_x={has_x} is not compatible. '
+            f'Instead aggregation with agg_strategy="first" will apply.', UserWarning, stacklevel=2
+        )
     pred_labels = []
     for (predictions, word_ids) in zip(outputs, inputs):
         # ignore items that have non zero labels (e.g. things that should be ignored)
@@ -41,7 +56,8 @@ def get_word_labels(inputs, outputs, agg_strategy, has_x):
             (
                 unique_word_ids.shape[0],
                 # TODO below len() is a hotfix to enable dual behaviour for raw probabilities (e.g. outputs) and targets
-                predictions.shape[-1] if len(predictions.shape) > 1 else 1
+                feature_dim
+                #predictions.shape[-1] if len(predictions.shape) > 1 else 1
             ),
             dtype=predictions.dtype
         )
@@ -57,8 +73,8 @@ def get_word_labels(inputs, outputs, agg_strategy, has_x):
             if agg_strategy == 'mean' and not has_x:
                 agg_predictions[i] = prediction_slice.mean(dim=0)
             elif agg_strategy == 'max' and not has_x:
-                agg_predictions[i] = prediction_slice.max(dim=0)
-            elif agg_strategy == 'first':
+                agg_predictions[i], _ = prediction_slice.max(dim=0)
+            else: #agg_strategy == 'first':
                 agg_predictions[i] = prediction_slice[0]
             start_id = end_id
 
