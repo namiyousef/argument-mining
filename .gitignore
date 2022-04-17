@@ -145,4 +145,5 @@ trest
 
 # cluster stuff
 TMPDIR
-*.sh
+gpu_script.sh
+Library
