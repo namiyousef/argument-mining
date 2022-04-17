@@ -626,70 +626,88 @@ class PersuadeProcessor(DataProcessor):
         
         df_ground_truth = pd.read_csv(path_to_ground_truth)
         df_texts = df_from_text_files(path_to_text_dir)
+        
         df_ground_truth = df_ground_truth.sort_values(['id', 'discourse_start', 'discourse_end'])
         df_ground_truth = df_ground_truth.drop(columns=['discourse_id','discourse_start','discourse_end','discourse_type_num'])
-        
-        ##Rename columns
         df_ground_truth = df_ground_truth.rename(columns={'discourse_type':'label','predictionstring':'predictionString',
-                                          'discourse_text':'text','id':'doc_id'})
+                                                  'discourse_text':'text','id':'doc_id'})
+
         df_texts = df_texts.rename(columns={'text':'doc_text','id':'doc_id'})
-        
         df_texts['text_split'] = df_texts.doc_text.str.split()
         df_texts['range'] = df_texts['text_split'].apply(lambda x: list(range(len(x))))
         df_texts['start_id'] = df_texts['range'].apply(lambda x: x[0])
         df_texts['end_id'] = df_texts['range'].apply(lambda x: x[-1])
         df_texts = df_texts.drop(columns=['text_split','range'])
         
+        df_ground_truth['predictionString'] = df_ground_truth.predictionString.apply(lambda x: [int(num) for num in x.split()])
+        df_ground_truth['pred_str_start_id'] = df_ground_truth.predictionString.apply(lambda x: x[0])
+        df_ground_truth['pred_str_end_id'] =  df_ground_truth.predictionString.apply(lambda x: x[-1])
         
-        df = df_ground_truth.groupby('doc_id').agg({
-            'text':lambda x: ' '.join(x),
-            'predictionString': lambda x: ' '.join(x),
-    
-        }).reset_index()
+        df = df_ground_truth.merge(df_texts)
         
-        df = df.merge(df_texts)
         
-        df['predictionString'] = df.predictionString.apply(lambda x: [int(num) for num in x.split()])
-        df['pred_str_start_id'] = df.predictionString.apply(lambda x: x[0])
-        df['pred_str_end_id'] =  df.predictionString.apply(lambda x: x[-1])
-        
-        new_df_end = pd.DataFrame()
-        new_df_start = pd.DataFrame()
-        for row in df.sort_values('doc_id').itertuples(index=False):
-            if row.end_id != row.pred_str_end_id:
-                s = row.doc_text.split()[row.pred_str_end_id+1:]
-                new_string = ' '.join(s)
-                new_predsStr = list(range(row.pred_str_end_id+1,row.end_id+1))
-                new_predsStr = " ".join([str(i) for i in new_predsStr])
-                new_type = 'Other'
-                new_id = row.doc_id
-                new_row = {'doc_id': new_id, 'text':new_string ,'label':'Other','predictionString':new_predsStr}
-                new_df_end = new_df_end.append(new_row,ignore_index=True)
+        new = []
+        df = df.sort_values(['doc_id','pred_str_start_id'])
+        prev_doc = df.iloc[0].doc_id
+        gd_end = -1
+        time_record = time.time()
+        for row in df.itertuples(index=False):
 
-            if row.start_id != row.pred_str_start_id:
-                s = row.doc_text.split()[:row.pred_str_start_id]
-                new_string = ' '.join(s)
-                new_predsStr = list(range(row.start_id,row.pred_str_start_id))
-                new_predsStr = " ".join([str(i) for i in new_predsStr])
-                new_type = 'Other'
-                new_id = row.doc_id
-                new_row = {'doc_id': new_id, 'text':new_string ,'label':'Other','predictionString':new_predsStr}
-                new_df_start = new_df_start.append(new_row,ignore_index=True)
+            if row.doc_id != prev_doc:
+
+                prev_row = df[(df.doc_id == prev_doc) & (df.pred_str_end_id == gd_end)].squeeze()
+
+                if prev_row.pred_str_end_id != prev_row.end_id:
+
+                    s = prev_row.doc_text.split()[prev_row.pred_str_end_id+1:]
+                    new_string = ' '.join(s)
+                    new_predsStr = list(range(prev_row.pred_str_end_id+1,prev_row.end_id+1))
+                    new_type = 'Other'
+                    new_id = prev_row.doc_id
+                    new_row = {'doc_id': new_id, 'text':new_string ,'label':'Other',
+                               'predictionString':new_predsStr,'pred_str_start_id':new_predsStr[0],
+                              'pred_str_end_id':new_predsStr[-1],'doc_text':prev_row.doc_text,
+                              'start_id':prev_row.start_id,'end_id':prev_row.end_id}
+                    new.append(new_row)
 
 
-        df_combined = df_ground_truth.append(new_df_end,ignore_index=True)
-        df_combined = new_df_start.append(df_combined,ignore_index=True)
+                if row.pred_str_start_id != row.start_id:
+                    s = row.doc_text.split()[:row.pred_str_start_id]
+                    new_string = ' '.join(s)
+                    new_predsStr = list(range(row.start_id,row.pred_str_start_id))
+                    new_type = 'Other'
+                    new_id = row.doc_id
+                    new_row = {'doc_id': new_id, 'text':new_string ,'label':'Other',
+                               'predictionString':new_predsStr,'pred_str_start_id':row.start_id,
+                              'pred_str_end_id':row.pred_str_start_id-1,'doc_text':row.doc_text,
+                              'start_id':row.start_id,'end_id':row.end_id}
+                    new.append(new_row)
 
-        
+                prev_doc = row.doc_id
+                gd_end = row.pred_str_end_id 
 
-        ##KEEP THE FOLLOWING OR NOT???
-        df_combined.predictionString = df_combined.predictionString.apply(lambda x: [int(num) for num in x.split()])
-        df_combined['start'] = df_combined.predictionString.apply(lambda x: x[0])
-        df_combined['end'] =  df_combined.predictionString.apply(lambda x: x[-1])
-        df_combined= df_combined.sort_values(['doc_id', 'start', 'end'])
+            else: #stay in the same doc
+                if row.pred_str_start_id != (gd_end+1) :
+                    s = row.doc_text.split()[gd_end+1:row.pred_str_start_id]
+                    new_string = ' '.join(s)
+                    new_predsStr = list(range(gd_end+1,row.pred_str_start_id))
+                    new_type = 'Other'
+                    new_id = row.doc_id
+                    new_row = {'doc_id': new_id, 'text':new_string ,'label':'Other',
+                               'predictionString':new_predsStr,'pred_str_start_id':gd_end+1,
+                              'pred_str_end_id':row.pred_str_start_id-1,'doc_text':row.doc_text,
+                              'start_id':row.start_id,'end_id':row.end_id}
+                    new.append(new_row)
 
-        
-        self.dataframe = df_combined
+
+                gd_end = row.pred_str_end_id  #line 7
+
+
+        df = pd.concat([df,pd.DataFrame().from_records(new)])
+        df = df.sort_values(['doc_id','pred_str_start_id','pred_str_end_id'])
+        df = df.drop(columns=['doc_text','start_id','end_id','pred_str_start_id','pred_str_end_id'])
+
+        self.dataframe = df
         self.status = 'preprocessed'
         return self
     
@@ -717,6 +735,8 @@ class PersuadeProcessor(DataProcessor):
             add_end='e' in strategy,
             add_beg='b' in strategy
         )
+        
+        df = get_predStr(df) 
         
         df['label'] = df[['label', 'predictionString']].apply(
             lambda x: _generate_entity_labels(
@@ -754,7 +774,6 @@ class PersuadeProcessor(DataProcessor):
         self.status = 'postprocessed'
 
         return self
-
 # class PersuadeProcessor(DataProcessor):
 
 #     def __init__(self, path=''):
