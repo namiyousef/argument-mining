@@ -596,11 +596,20 @@ class TUDarmstadtProcessor(DataProcessor):
 
         dfs = {}
         df = self.dataframe.copy()
-        df_train = df[ids_train]
-        df_test = df[ids_test]
-        dfs['test'] = df_test
-        dfs['train'] = df_train
+        if self.status == 'postprocessed':
+            df_train = df[ids_train]
+            df_test = df[ids_test]
+            dfs['test'] = df_test
+            dfs['train'] = df_train
+        elif self.status == 'preprocessed':
+            doc_ids_test = df_tts_ids.index.values[ids_test]
+            df_test = df[df.doc_id.isin(doc_ids_test)]
+            df_train = df[~df.doc_id.isin(doc_ids_test)]
+            dfs['test'] = df_test
+            dfs['train'] = df_train
 
+
+        # TODO this is now broken because of hotfix above, need unittests
         n_samples = df.shape[0]
         if val_size:
             val_size = int(val_size * n_samples)

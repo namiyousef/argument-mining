@@ -292,14 +292,16 @@ env
                 '''
     with open(f'job_scripts/{JOB_NAME}.sh', 'w') as f:
         f.write(script_text)
-if __name__ == '__main__':
-    for dataset in {'Persuade', 'TUDarmstadt'}:
-        for model_name in {
-            #'google/bigbird-roberta-base',
-            'roberta-base'
-        }:
-            for strategy in {'io', 'bio', 'bieo'}:
-                for epochs in {5, 20}:
-                    _generate_job_scripts(
-                        dataset, model_name, epochs, strategy
-                    )
+
+
+#if __name__ == '__main__':
+#    for dataset in {'Persuade', 'TUDarmstadt'}:
+#        for model_name in {
+#            #'google/bigbird-roberta-base',
+#            'roberta-base'
+#        }:
+#            for strategy in {'io', 'bio', 'bieo'}:
+#                for epochs in {5, 20}:
+#                    _generate_job_scripts(
+#                        dataset, model_name, epochs, strategy
+#                    )
