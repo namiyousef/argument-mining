@@ -91,6 +91,7 @@ def send_job_completion_report(job_name):
         df_scores = pd.read_json('scores.json')
         df_label_map = df_label_map.merge(
             df_scores.groupby('class').mean().reset_index(), how='left', left_on='label_id', right_on='class'
+            # TODO this will fail hard if you make changes to the code. Needs to be more robust for reporting
         ).set_index('label')[['f1']]
 
         macro_f1 = df_label_map['f1'].mean()
@@ -174,3 +175,131 @@ def get_predStr(df):
         start_id = end_id
     df['predictionString'] = prediction_strings
     return df
+
+
+def _generate_job_scripts(DATASET, MODEL_NAME, EPOCHS, STRATEGY):
+    assert DATASET in {'Persuade', 'TUDarmstadt'}
+    assert MODEL_NAME in {'google/bigbird-roberta-base', 'roberta-base'}
+    assert STRATEGY in {'io', 'bio', 'bieo'}
+    # inferred variables
+
+    if DATASET == 'Persuade' and EPOCHS == 20:
+        HOURS = 24
+    else:
+        HOURS = 6
+
+    if MODEL_NAME == 'google/bigbird-roberta-base':
+        MAX_LENGTH = 1024
+        MODEL_SHORT = 'bigbird'
+    else:
+        MAX_LENGTH = 512
+        MODEL_SHORT = 'roberta'
+
+    JOB_NAME = f'{DATASET}_e{EPOCHS}_{STRATEGY}_{MODEL_SHORT}'
+
+    script_text = f'''#!/bin/bash -l
+#$ -m be
+
+# Request ten minutes of wallclock time (format hours:minutes:seconds).
+#$ -l h_rt={HOURS}:00:0
+
+# request GPU node
+#$ -l gpu=1
+
+# request A100 GPU node
+# #$ -ac allow=L
+
+# Request RAM (must be an integer followed by M, G, or T)
+#$ -l mem=32G
+
+# Request temp space
+#$ -l tmpfs=15G
+
+# Set the name of the job.
+#$ -N {JOB_NAME}
+
+nvidia-smi
+
+# ENV VARIABLES
+# -- email configs
+export EMAIL_PASSWORD="NLP.FYP1800"
+export EMAIL_RECIPIENTS="ucabyn0@ucl.ac.uk, ucabfd0@ucl.ac.uk, ucabqfe@ucl.ac.uk, ucabc21@ucl.ac.uk, qingyu.feng.21@ucl.ac.uk, changmao.huang.21@ucl.ac.uk"
+
+# -- model specific configs
+export MODEL_NAME="{MODEL_NAME}"
+export MAX_LENGTH={MAX_LENGTH}
+
+# -- training configs
+export EPOCHS={EPOCHS}
+export BATCH_SIZE=4
+export VERBOSE=2
+export SAVE_FREQ=10
+export TEST_SIZE="0.3"
+
+# -- dataset configs
+export DATASET="Persuade"
+
+# -- experiment configs
+export STRATEGY_LEVEL="standard"
+export STRATEGY_NAME="{STRATEGY}"
+export STRATEGY="${{STRATEGY_LEVEL}}_${{STRATEGY_NAME}}"
+export RUN_INFERENCE=1
+
+# -- inferred variables
+export JSON_FILE_NAME="${{DATASET}}_postprocessed.json"
+export DATA_PATH="data/${{STRATEGY_NAME}}/${{JSON_FILE_NAME}}"
+
+# TODO this is a hotfix due to darmstadt processor tts. Needs cleaning
+export TTS_FILE="train-test-split.csv"
+export TTS_PATH="data/${{TTS_FILE}}"
+cp -r $TTS_PATH $TMPDIR/$TTS_FILE
+
+# Set the working directory to somewhere in your scratch space.
+#  This is a necessary step as compute nodes cannot write to $HOME.
+# Replace "<your_UCL_id>" with your UCL user ID.
+#$ -wd /home/ucabyn0/Scratch
+
+# COPY NECESSARY FILES
+cp -r job_files/run.py $TMPDIR/run.py
+cp -r $DATA_PATH $TMPDIR/$JSON_FILE_NAME
+cp -r venv $TMPDIR/venv
+
+cd $TMPDIR
+
+
+# LOAD MODULES
+module unload compilers mpi
+module load compilers/gnu/4.9.2
+module load python/3.7.4
+module load cuda/10.1.243/gnu-4.9.2
+module load cudnn/7.5.0.56/cuda-10.1
+
+# venv should have the most recent version of argminer installed
+source venv/bin/activate
+
+
+
+python3 -c "import torch; print(f'GPU Availability: torch.cuda.is_available()')"
+python3 run.py $DATASET $STRATEGY $MODEL_NAME $MAX_LENGTH -test-size=$TEST_SIZE -b=$BATCH_SIZE -e=$EPOCHS -save-freq=$SAVE_FREQ -verbose=$VERBOSE -i=$RUN_INFERENCE
+python3 -c "from argminer.utils import send_job_completion_report; send_job_completion_report('${{JOB_ID}}')"
+
+
+# nvidia-smi
+
+tar -zcvf $HOME/Scratch/files_from_job_$JOB_ID.tar.gz $TMPDIR
+
+env
+                '''
+    with open(f'job_scripts/{JOB_NAME}.sh', 'w') as f:
+        f.write(script_text)
+if __name__ == '__main__':
+    for dataset in {'Persuade', 'TUDarmstadt'}:
+        for model_name in {
+            #'google/bigbird-roberta-base',
+            'roberta-base'
+        }:
+            for strategy in {'io', 'bio', 'bieo'}:
+                for epochs in {5, 20}:
+                    _generate_job_scripts(
+                        dataset, model_name, epochs, strategy
+                    )

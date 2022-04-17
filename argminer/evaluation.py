@@ -13,19 +13,24 @@ from argminer.config import PREDICTION_STRING_START_ID
 def get_word_labels(inputs, outputs, agg_strategy, has_x):
     """
     Function that aggregates from subtokens back to words given an aggregation strategy,
-    probabilities for each subtoken, and word_ids
+    probabilities for each subtoken, and word_ids. This can also be used for targets with the restriction
+    that agg_strategy='first'
 
     :param inputs: word ids that map each subtoken to it's word. This comes from tokenizer(string).word_ids()
-    but has the None parameters replaced with '-1' indicating that it is not a word (e.g. SEP, CLS)
+    but has the None parameters replaced with a value less than zero (e.g. -100) indicating that it is not a word (e.g. SEP, CLS)
     :type inputs: torch.Tensor
     :param outputs: raw predictions from a model output (OR the target variables)
-    :type outputs: torch.Tensor
-    :param agg_strategy: defines how the subtokens are aggregated back to words
+    :type outputs: torch.Tensor (of dtype=torch.int64 for targets)
+    :param agg_strategy: defines how the subtokens are aggregated back to words. This takes 'max', 'first' or 'mean'
     :type agg_strategy: str
+    :param has_x: flag to indicates whether to ignore subtokens or not. Automatically defers to agg_strategy='first' if true
+    :type has_x: bool
 
     :returns: list of shortened tensors corresponding to each word
     :rtype: list
     """
+
+    # -- CONFIGURATION
     prediction_shape = outputs[0].shape
     if len(prediction_shape) > 1:
         feature_dim = prediction_shape[-1]
@@ -34,38 +39,29 @@ def get_word_labels(inputs, outputs, agg_strategy, has_x):
         if outputs.dtype == torch.int64 and agg_strategy != 'first':
             raise ValueError('agg_strategy must be "first" if aggregating targets vector.')
 
-    # TODO add a warning about targets NOT being compatible with non_first aggs and that doing so will break it!
     if has_x and agg_strategy != 'first':
         warnings.warn(
             f'agg_strategy="{agg_strategy}" with has_x={has_x} is not compatible. '
             f'Instead aggregation with agg_strategy="first" will apply.', UserWarning, stacklevel=2
         )
+
+
     pred_labels = []
     for (predictions, word_ids) in zip(outputs, inputs):
-        # ignore items that have non zero labels (e.g. things that should be ignored)
-        # NOTE if ignoring subtokens, will this affect the mapping back? Maybe need separate labels
-        # for CLS, SEP and also subtokens, if wishing to ignore subtokens
-        mask = word_ids >= 0 # TODO double check this across code
 
-        # filter out SEP, CLS
+        # filter items that don't correspond to words
+        mask = word_ids >= 0
         word_ids = word_ids[mask]
         predictions = predictions[mask]
 
         unique_word_ids, word_id_counts = torch.unique_consecutive(word_ids, return_counts=True)
-        agg_predictions = torch.zeros(
-            (
-                unique_word_ids.shape[0],
-                # TODO below len() is a hotfix to enable dual behaviour for raw probabilities (e.g. outputs) and targets
-                feature_dim
-                #predictions.shape[-1] if len(predictions.shape) > 1 else 1
-            ),
-            dtype=predictions.dtype
-        )
+        agg_predictions = torch.zeros((unique_word_ids.shape[0], feature_dim), dtype=predictions.dtype)
 
         start_id = 0
         for i, (unique_word_id, word_id_count) in enumerate(zip(unique_word_ids, word_id_counts)):
 
             end_id = start_id + word_id_count
+
             # get segments corresponding to word
             prediction_slice = predictions[start_id: end_id]
 
@@ -74,12 +70,9 @@ def get_word_labels(inputs, outputs, agg_strategy, has_x):
                 agg_predictions[i] = prediction_slice.mean(dim=0)
             elif agg_strategy == 'max' and not has_x:
                 agg_predictions[i], _ = prediction_slice.max(dim=0)
-            else: #agg_strategy == 'first':
+            else:
                 agg_predictions[i] = prediction_slice[0]
             start_id = end_id
-
-        # TODO need options to return the probas and also the assoc labels?
-        # maybe better to go in df form here?
 
         pred_labels.append(agg_predictions)
         
@@ -89,13 +82,14 @@ def get_predictionString(labels, doc_ids):
     """
     Function that takes list of tensors along with unique document ids to generate a dataframe
     with predictionStrings for each (doc_id, class).
-    :param labels: list of tensors that contain classes
+
+    :param labels: list of tensors that contain classes, must be of type torch.int64
     :type labels: list
     :param doc_ids: collection of document ids pertaining to each item in labels
     :type doc_ids: torch.Tensor
+
     :returns: dataframe in the following form (doc_id, class, predictionString) where predictionString is a set
     """
-    # TODO need to ensure that we are mapping to the correct class names and doc IDs!
 
     ids = []
     classes = []
@@ -103,7 +97,8 @@ def get_predictionString(labels, doc_ids):
 
     for doc_id, label in zip(doc_ids, labels):
         unique_classes, unique_class_counts = torch.unique_consecutive(label, return_counts=True)
-        start_id = PREDICTION_STRING_START_ID # TODO this defines the start of a predictionString
+        # define prediction string start
+        start_id = PREDICTION_STRING_START_ID
         for unique_class, unique_class_count in zip(unique_classes, unique_class_counts):
             ids.append(doc_id.item())
             classes.append(unique_class.item())
@@ -112,11 +107,10 @@ def get_predictionString(labels, doc_ids):
             start_id = end_id
     return pd.DataFrame(data={'id': ids, 'class': classes, 'predictionString': prediction_strings})
 
-def evaluate(df_outputs, df_targets):
+def evaluate(df_outputs, df_targets, threshold=0.5):
     """
-    Calculates the macro f1 score for a given batch of data
-    This function is based on the instructions from the Kaggle evaluation as well as
-    the notebook from Changmao's friend
+    Calculates the macro f1 score for a given batch of data. This Macro F1 score is based on the following:
+    https://www.kaggle.com/competitions/feedback-prize-2021/overview/evaluation
 
     # TODO rename this function
     :param df_outputs: outputs dataframe directly from get_predictionString
@@ -168,8 +162,9 @@ def evaluate(df_outputs, df_targets):
     )
 
     # label true positives
+    # TODO add thresholds here
     df_targets['tp'] = df_targets[[overlap_pred_gt, overlap_gt_pred]].apply(
-        lambda x: int(x.overlap_pred_gt >= 0.5 and x.overlap_gt_pred >= 0.5), axis=1
+        lambda x: int(x.overlap_pred_gt >= threshold and x.overlap_gt_pred >= threshold), axis=1
     )
     # find the maximum overlap
     # NOTE: I'm not convinced about this. There will be cases where this does not give a correct answer
