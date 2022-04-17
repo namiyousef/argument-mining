@@ -706,6 +706,7 @@ class PersuadeProcessor(DataProcessor):
         df = pd.concat([df,pd.DataFrame().from_records(new)])
         df = df.sort_values(['doc_id','pred_str_start_id','pred_str_end_id'])
         df = df.drop(columns=['doc_text','start_id','end_id','pred_str_start_id','pred_str_end_id'])
+        df = df.reset_index(drop=True)
 
         self.dataframe = df
         self.status = 'preprocessed'
