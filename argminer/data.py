@@ -602,7 +602,7 @@ class TUDarmstadtProcessor(DataProcessor):
             dfs['test'] = df_test
             dfs['train'] = df_train
         elif self.status == 'preprocessed':
-            doc_ids_test = df_tts_ids.index.values[ids_test]
+            doc_ids_test = df_tts_ids.ID.values[ids_test]
             df_test = df[df.doc_id.isin(doc_ids_test)]
             df_train = df[~df.doc_id.isin(doc_ids_test)]
             dfs['test'] = df_test
@@ -904,5 +904,17 @@ def create_labels_doc_level(
 
     return df_texts
 
+if __name__ == '__main__':
+    processor = TUDarmstadtProcessor('../data/UCL/dataset2/ArgumentAnnotatedEssays-2.0')
+    processor = processor.preprocess().process('bio', split='test').postprocess()
+    df_test = processor.dataframe
+
+    processor = TUDarmstadtProcessor('../data/UCL/dataset2/ArgumentAnnotatedEssays-2.0')
+    processor = processor.preprocess().process('bio').postprocess()
+    df_test_new = processor.get_tts()['test']
+
+    from pandas.testing import assert_frame_equal
+    assert_frame_equal(df_test_new.reset_index(drop=True),
+                       df_test.reset_index(drop=True))
 
 
