@@ -1,4 +1,4 @@
-# argminer
+# ArgMiner: End-to-end Argument Mining 
 
 ![GitHub](https://img.shields.io/github/license/namiyousef/argument-mining)
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/namiyousef/argument-mining/Python%20package)
@@ -15,7 +15,17 @@ _argminer_ is a PyTorch based package for argument mining on state-of-the-art da
 
 Another important dataset in this field is the ARG2020 [[3]](#3) dataset. This was made public at a time coinciding with the early access release so support for it does not yet exist. There are plans to implement this in the future.
 
-## Data Processing API
+## Installation
+You can install the package directly from PyPI using pip:
+```bash
+pip install argminer
+```
+If looking to install from the latest commit, please use the following:
+```bash
+pip install argminer@git+https://git@github.com/namiyousef/argument-mining.git@develop 
+```
+
+## Argminer features
 
 Datasets in the field of argument mining are stored in completely different formats and have different labels. This makes it difficult to compare and contrast model performance on them provided different configurations and processing steps. 
 
@@ -79,24 +89,8 @@ Considering all combinations, the processor API provies functionality for the fo
 
 ### Data Augmentation (Adversarial Examples)
 
+
 ### Evaluation
-
-
-# Installation
-You can install the package directly from PyPI using pip:
-```bash
-pip install argminer
-```
-If looking to install from the latest commit, please use the following:
-```bash
-pip install argminer@git+https://git@github.com/namiyousef/argument-mining.git@develop 
-```
-
-# Available Datasets
-- TODO
-
-# Documentation
-- TODO
 
 # Quick Start
 - TODO
