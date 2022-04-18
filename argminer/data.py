@@ -557,21 +557,13 @@ class TUDarmstadtProcessor(DataProcessor):
         # aggregates data
 
         df = self.dataframe.copy()
-        df['predictionString'] = df['predictionString'].apply(
-            lambda x: ' '.join([str(item) for item in x])
-        )
-        df['label'] = df['label'].apply(
-            lambda x: ' '.join([str(item) for item in x])
-        )
+        
 
         df = df.groupby('doc_id').agg({
             'text':lambda x: ' '.join(x),
-            'predictionString': lambda x: ' '.join(x),
-            'label': lambda x: ' '.join(x)
+            'predictionString': 'sum',
+            'label': 'sum'
         })
-
-        df['label'] = df['label'].str.split()
-        df['predictionString'] = df['predictionString'].str.split().apply(lambda x: [int(x) for x in x])
 
         df = df.reset_index().rename(columns={'label':'labels'})
 
@@ -762,24 +754,14 @@ class PersuadeProcessor(DataProcessor):
     
     def _postprocess(self):
         df_post = self.dataframe.copy()
-        df_post['predictionString'] = df_post['predictionString'].apply(
-                    lambda x: ' '.join([str(item) for item in x])
-                )
-
-        df_post['label'] = df_post['label'].apply(
-                    lambda x: ' '.join([str(item) for item in x])
-                )
         df_post = df_post.groupby('doc_id').agg({
             'text':lambda x: ' '.join(x),
-            'predictionString': lambda x: ' '.join(x),
-            'label': lambda x: ' '.join(x)
-        })
-        df_post['label'] = df_post['label'].str.split()
-        df_post['predictionString'] = df_post['predictionString'].str.split().apply(lambda x: [int(x) for x in x])
-
-        df_post = df_post.reset_index()
+            'predictionString': 'sum',
+            'label': 'sum'
+        }).reset_index()
         
-    
+        df_post = df_post.rename(columns={'label':'labels'})
+ 
         self.dataframe = df_post
         self.status = 'postprocessed'
 
