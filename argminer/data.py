@@ -390,6 +390,7 @@ class DataProcessor:
         # TODO need to add a fixed seed here...
         # TODO test and val sizes relative to initial dataset
         df = self.dataframe.copy()
+        print(df.shape)
         n_samples = df.shape[0]
 
         test_size = int(test_size * n_samples)
@@ -724,6 +725,7 @@ class PersuadeProcessor(DataProcessor):
         else:
             df_dict = self.get_tts(**split_params)
             df = df_dict[split]
+            print(df.shape)
             warnings.warn(f'Getting data for split={split} with params {split_params}', UserWarning, stacklevel=2)
 
 
@@ -753,6 +755,7 @@ class PersuadeProcessor(DataProcessor):
         return self
     
     def _postprocess(self):
+        print(self.dataframe.shape)
         df_post = self.dataframe.copy()
         df_post = df_post.groupby('doc_id').agg({
             'text':lambda x: ' '.join(x),
