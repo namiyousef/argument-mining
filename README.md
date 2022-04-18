@@ -27,14 +27,55 @@ The data processing API provides a standard method of processing these datasets 
 
 SOTA argument mining methods treat the process of chunking text into it's argument types and classifying them as an NER problem on long sequences. This means that segment of text with it's associated label is converted into a sequence of classes for the model to predict. To illustrate this we will be using the following passage:
 
-"Natural Language Processing is the best field in Machine Learning. According to a recent poll by DeepLearning.ai it's popularity has increased by twofold in the last 2 years."
+```python
+"Natural Language Processing is the best field in Machine Learning.According to a recent poll by DeepLearning.ai it's popularity has increased by twofold in the last 2 years."
+```
+
 
 Let's suppose for the sake of argument that the passage has the following labels:
-- "Natural Language Processing is the best field in Machine Learning.": Claim
-- "According to a recent poll by DeepLearning.ai it's popularity has increased by twofold in the last 2 years.": Evidence
 
-The data processing API allows multiple labelling schemes. These are best
+**Sentence 1: Claim**
+```python
+sentence_1 = "Natural Language Processing is the best field in Machine Learning."
+label_2 = "Claim"
+```
 
+**Sentence 2: Evidence**
+```python
+sentence_2 = "According to a recent poll by DeepLearning.ai it's popularity has increased by twofold in the last 2 years."
+label_2 = "Evidence"
+```
+
+From this we can create a vector with the associated label for each word. Thus the whole text would have an assoicated label as follows:
+
+```python
+labels = ["Claim"]*10 + ["Evidence"]*18  # numbers are length of split sentences
+```
+
+With the NER style of labelling, you can modify the above to indicate whether a label is the beginning of a chunk, the end of a chunk or inside a chunk. For example, `"According"` could be labelled as `"B-Evidence"` in sentence 2, and the subsequent parts of it would be labelled as `"I-Evidence"`.
+
+The above is easy if considering a split on words, however this becomes more complicated when we considered how transformer models work. These tokenise inputs based on substrings, and therefore the labels have to be extended. Further questions are raised, for instance: if the word according is split into `"Accord"` and `"ing"`, do we label both of these as `"B-Evidence"` or should we label `"ing"` as `"I-Evidence"`? Or do we just ignore subtokens? Or do we label subtokens as a completely separate class?
+
+We call a labelling strategy that keeps the subtoken labels the same as the start token labels `"wordLevel"` and a strategy that differentiates between them as `"standard"`. Further we provide the following labelling strategies:
+
+- **IO:** Argument tokens are classified as `"I-{arg_type}"` and non-argument tokens as `"O"`
+- **BIO:** Argument start tokens are classified as `"B-{arg_type}"`, all other argument tokens as `"I-{arg_type}"`". Non-argument tokens as `"O"`
+- **BIEO:** Argument start tokens are classified as `"B-{arg_type}"`, argument end tokens as `"E-{arg_type}"` and all other argument tokens as `"I-{arg_type}"`. Non-argument tokens as `"O"`
+- **BIXO:** First argument start tokens are classified as `"B-{arg_type}"`, other argument start tokens are classified as `"I-{arg_type}"`. Argument subtokens are classified as `"X"`. Non-argument tokens as `"O"`
+
+Considering all combinations, the processor API provies functionality for the following strategies:
+
+- standard_io
+- wordLevel_io
+- standard_bio
+- wordLevel_bio
+- standard_bieo*
+- wordLevel_bieo
+- standard_bixo**
+
+* `B-` labels are prioritised over `E-` tokens, e.g. for a single word sentence the word would be labelled as `B-`.
+
+** This method is not one that is backed by literature. It is something that we thought would be interesting to examine. The intuition is that the `X` label captures grammatical elements of argument segments.
 
 ### Data Augmentation (Adversarial Examples)
 
