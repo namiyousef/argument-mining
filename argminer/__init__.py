@@ -1,2 +1,3 @@
 import argminer
-print('Import of ArgMiner successful')
+
+__version__ = '0.0.14'

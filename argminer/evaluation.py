@@ -1,7 +1,9 @@
 # -- public imports
+import gc
 import torch
 import warnings
 import pandas as pd
+import time # TODO remove this after debug
 
 # -- private imports
 from colabtools.config import DEVICE
@@ -248,12 +250,15 @@ def inference(model, testloader, metrics=[]):
             inputs = move_to_device(inputs, DEVICE)
             targets = move_to_device(targets, DEVICE)
 
+            s = time.time() # TODO add verbose statement
             loss, outputs = model(
                 labels=targets,
                 input_ids=inputs['input_ids'],
                 attention_mask=inputs['attention_mask'],
                 return_dict=False
             )
+            print(f'Prediction time: {time.time() - s:.3g}')
+
             word_ids = inputs['word_ids']
             doc_ids = inputs['index']
 
@@ -262,6 +267,7 @@ def inference(model, testloader, metrics=[]):
                 f'{metric.__class__.__name__}_no_agg': metric(outputs, targets) for metric in metrics
             })
 
+            s = time.time()
             # aggregate from subtoken to words # TODO strat needs to be parametrised
             word_label_probas = get_word_labels(word_ids, outputs, agg_strategy='first', has_x=False)
             word_label_ids = [tensor.argmax(dim=1) for tensor in word_label_probas]
@@ -272,7 +278,14 @@ def inference(model, testloader, metrics=[]):
             target_label_ids = [tensor.flatten() for tensor in target_label_probas]
 
 
+            # TODO try on GPU and optimise memory and speed. Perform pandas operations on CPU
+            del targets, outputs
+            gc.collect()
+            torch.cuda.empty_cache()
+
+
             # measure performance at word level, before labels are mapped to reduced form
+            # TODO double check metrics here is working
             df_metrics_agg = pd.DataFrame.from_records({
                 f'{metric.__class__.__name__}_agg': [
                     metric(output, target).item() for output, target in zip(word_label_ids, target_label_ids)
@@ -282,6 +295,8 @@ def inference(model, testloader, metrics=[]):
             # map word labels to reduced form
             word_labels = [reduce_map_values[label_ids] for label_ids in word_label_ids]
             target_labels = [reduce_map_values[label_ids] for label_ids in target_label_ids]
+
+            print(f'Agg to word time: {time.time() - s:.3g}')
 
 
             # measure performance at word level, for reduced labels
@@ -296,16 +311,24 @@ def inference(model, testloader, metrics=[]):
 
 
             # get dataframes of (doc_id, class, prediction_string)
+            s = time.time()
             df_targets_predString = get_predictionString(target_labels, doc_ids)
             df_outputs_predString = get_predictionString(word_labels, doc_ids)
 
+            print(f'Get predstring time: {time.time() - s:.3g}')
+
+
             # get scores (and macro f1)
+            s = time.time()
             df_scores = evaluate(df_outputs_predString, df_targets_predString)
+            print(f'Evaluate time: {time.time() - s:.3g}')
 
             total_metrics.append(df_metrics)
             total_scores.append(df_scores)
+            print(f'Batch {i+1} complete.')
 
-    df_metrics_total = pd.concat(total_metrics) # TODO what does the index here mean?
+        # TODO inference is very slow....
+    df_metrics_total = pd.concat(total_metrics)
     df_scores_total = pd.concat(total_scores).reset_index(drop=True)
     # TODO add a reduce operation on inference
 
