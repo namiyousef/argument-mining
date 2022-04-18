@@ -36,10 +36,13 @@ setup(
         'matplotlib',
         #'colab-dev-tools@git+https://git@github.com/namiyousef/colab-utils.git',
         'mlutils@git+https://git@github.com/namiyousef/ml-utils.git@develop',
+        'connexion[swagger-ui]'
         #'pip install torch==1.7.1+cu101 torchvision==0.8.2+cu101 torchaudio==0.7.2 -f https://download.pytorch.org/whl/torch_stable.html'
     ],
     #package_data={}
     packages=find_packages(exclude=('tests*', 'experiments*')),
     license='MIT',
-    #entry_points=(),
+    entry_points={
+        'console_scripts': ['argminer-api=argminer.run_api:main'],
+    }
 )

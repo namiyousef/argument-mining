@@ -375,6 +375,7 @@ class DataProcessor:
         return self
 
     def save_json(self, dir_path=''):
+        print("THIS BETTER SHOW")
         # TODO maybe add option for custom file name?
         filename = f'{self.__class__.__name__.split("Processor")[0]}_{self.status}.json'
         path = os.path.join(dir_path, filename)
