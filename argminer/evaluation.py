@@ -219,7 +219,7 @@ def evaluate(df_outputs, df_targets, threshold=0.5):
 
     return scores
 
-def inference(model, testloader, metrics=[]):
+def inference(model, testloader, metrics=[], return_labels=False):
     # TODO add options for agg method
     """
     Takes a trained model and evaluates its performance based on the Macro F1 score from Kaggle as well
@@ -243,6 +243,8 @@ def inference(model, testloader, metrics=[]):
 
     total_metrics = []
     total_scores = []
+
+    target_labels_full = []
 
     with torch.no_grad():
         for i, (inputs, targets) in enumerate(testloader):
@@ -296,6 +298,9 @@ def inference(model, testloader, metrics=[]):
             word_labels = [reduce_map_values[label_ids] for label_ids in word_label_ids]
             target_labels = [reduce_map_values[label_ids] for label_ids in target_label_ids]
 
+            if return_labels:
+                for target_label in target_labels:
+                    target_labels_full.append(target_label)
             print(f'Agg to word time: {time.time() - s:.3g}')
 
 
@@ -331,5 +336,15 @@ def inference(model, testloader, metrics=[]):
     df_metrics_total = pd.concat(total_metrics)
     df_scores_total = pd.concat(total_scores).reset_index(drop=True)
     # TODO add a reduce operation on inference
+    if target_labels_full:
+        return df_metrics_total, df_scores_total, target_labels_full
+    else:
+        return df_metrics_total, df_scores_total
 
-    return df_metrics_total, df_scores_total
+def _get_scores_agg(df):
+    df = df.groupby('class').sum()
+    df['f1'] = df.tp / (df.tp + 1/2*(df.fp + df.fn))
+    df['recall'] = df.tp / (df.tp + df.fn)
+    df['precision'] = df.tp / (df.tp + df.fp)
+    scores = {'macro_f1':df['f1'].mean(), 'macro_recall': df['recall'].mean(), 'macro_precision': df['precision'].mean()}
+    return scores, df

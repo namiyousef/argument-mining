@@ -333,6 +333,51 @@ class DataProcessor:
         self.status = None
         self.dataframe = None
 
+    def _process(self, strategy, processors=[]):
+
+        df = self.dataframe.copy()
+
+        for processor in processors:
+            df['text'] = df['text'].apply(processor)
+
+            # add predStr
+        df = get_predStr(df)  # TODO double check start pred string here
+
+        # add labelling strategy
+        label_strat = dict(
+            add_end='e' in strategy,
+            add_beg='b' in strategy
+        )
+        df['label'] = df[['label', 'predictionString']].apply(
+            lambda x: _generate_entity_labels(
+                len(x['predictionString']), x['label'], **label_strat
+            ), axis=1
+        )
+
+        self.dataframe = df
+        self.status = 'processed'
+
+        return self
+
+    def _postprocess(self):
+
+        df = self.dataframe.copy()
+
+        df = df.groupby('doc_id').agg({
+            'text': lambda x: ' '.join(x),
+            'predictionString': 'sum',
+            'label': 'sum'
+        })
+
+        df = df.reset_index().rename(columns={'label': 'labels'})[['text', 'labels']]
+
+        self.dataframe = df
+        self.status = 'postprocessed'
+
+        return self
+
+
+
     @property
     def preprocess(self):
         """ This is pretokenisation cleaning / what is done at reading"""
@@ -361,13 +406,14 @@ class DataProcessor:
         return self._postprocess
 
 
-    def from_json(self, status='postprocessed'):
-
+    def from_json(self, status='postprocessed', df=None):
         assert status in {'preprocessed', 'processed', 'postprocessed'}
-        filename = f'{self.__class__.__name__.split("Processor")[0]}_{status}.json'
-        path = os.path.join(self.path, filename)
 
-        df = pd.read_json(path)
+        if df is None:
+            filename = f'{self.__class__.__name__.split("Processor")[0]}_{status}.json'
+            path = os.path.join(self.path, filename)
+
+            df = pd.read_json(path)
 
         self.dataframe = df
         self.status = status
@@ -911,16 +957,18 @@ def create_labels_doc_level(
     return df_texts
 
 if __name__ == '__main__':
-    processor = TUDarmstadtProcessor('../data/UCL/dataset2/ArgumentAnnotatedEssays-2.0')
-    processor = processor.preprocess().process('bio', split='test').postprocess()
-    df_test = processor.dataframe
 
-    processor = TUDarmstadtProcessor('../data/UCL/dataset2/ArgumentAnnotatedEssays-2.0')
-    processor = processor.preprocess().process('bio').postprocess()
-    df_test_new = processor.get_tts()['test']
+    processor = DataProcessor('test').preprocess()
 
-    from pandas.testing import assert_frame_equal
-    assert_frame_equal(df_test_new.reset_index(drop=True),
-                       df_test.reset_index(drop=True))
+    #processor = processor.preprocess().process('bio', split='test').postprocess()
+    #df_test = processor.dataframe
+
+    #processor = TUDarmstadtProcessor('../data/UCL/dataset2/ArgumentAnnotatedEssays-2.0')
+    #processor = processor.preprocess().process('bio').postprocess()
+    #df_test_new = processor.get_tts()['test']
+
+    #from pandas.testing import assert_frame_equal
+    #assert_frame_equal(df_test_new.reset_index(drop=True),
+    #                   df_test.reset_index(drop=True))
 
 

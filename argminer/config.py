@@ -34,3 +34,44 @@ for dataset, labels in LABELS_DICT.items():
             'label_id': list(range(len(new_labels))),
             'label': new_labels
         })
+
+
+MODEL_MAP_DICT = {
+    'ucabqfe/bigBird_PER_io': dict(
+        num_labels=8
+    ),
+    'ucabqfe/bigBird_PER_bio': dict(
+        num_labels=15
+    ),
+    'ucabqfe/bigBird_PER_bieo': dict(
+        num_labels=22
+    ),
+    'ucabqfe/bigBird_AAE_io': dict(
+        num_labels=4
+    ),
+    'ucabqfe/bigBird_AAE_bio': dict(
+        num_labels=7
+    ),
+    'ucabqfe/bigBird_AAE_bieo': dict(
+        num_labels=10
+    ),
+    'ucabqfe/roberta_PER_io': dict(
+        num_labels=8
+    ),
+    'ucabqfe/roberta_PER_bio': dict(
+        num_labels=15
+    ),
+    'ucabqfe/roberta_PER_bieo': dict(
+        num_labels=22
+    ),
+    'ucabqfe/roberta_AAE_io': dict(
+        num_labels=4
+    ),
+    'ucabqfe/roberta_AAE_bio': dict(
+        num_labels=7
+    ),
+    'ucabqfe/roberta_AAE_bieo': dict(
+        num_labels=10
+    ),
+
+}
