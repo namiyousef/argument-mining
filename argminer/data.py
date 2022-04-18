@@ -725,6 +725,7 @@ class PersuadeProcessor(DataProcessor):
         else:
             df_dict = self.get_tts(**split_params)
             df = df_dict[split]
+            print('After split: ', df.shape)
             warnings.warn(f'Getting data for split={split} with params {split_params}', UserWarning, stacklevel=2)
 
 
@@ -746,15 +747,22 @@ class PersuadeProcessor(DataProcessor):
                 len(x['predictionString']), x['label'], **label_strat
             ), axis=1
         )
+        print('before save in process: ', df.shape)
 
         self.dataframe = df
+        print('after save in process: ', df.shape)
+
         self.status = 'processed'
 
 
         return self
     
     def _postprocess(self):
+        print('before load in postprocess: ', self.dataframe.shape)
+
         df_post = self.dataframe.copy()
+        print('after load in postprocess: ', df_post.shape)
+
         df_post = df_post.groupby('doc_id').agg({
             'text':lambda x: ' '.join(x),
             'predictionString': 'sum',
@@ -762,8 +770,12 @@ class PersuadeProcessor(DataProcessor):
         }).reset_index()
         
         df_post = df_post.rename(columns={'label':'labels'})
- 
+
+        print('before save in postprocess: ', df_post.shape)
+
         self.dataframe = df_post
+        print('after save in postprocess: ', self.dataframe.shape)
+
         self.status = 'postprocessed'
 
         return self
