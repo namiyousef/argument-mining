@@ -127,3 +127,23 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Mac stuff
+.idea
+.DS_Store
+
+# project stuff
+data
+
+# google cloud
+.tmp.driveupload
+.tmp.drivedownload
+trest
+
+# VS Code
+.vscode
+
+# cluster stuff
+TMPDIR
+gpu_script.sh
+Library
