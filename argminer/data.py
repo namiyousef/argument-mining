@@ -391,7 +391,7 @@ class DataProcessor:
         # TODO need to add a fixed seed here...
         # TODO test and val sizes relative to initial dataset
         df = self.dataframe.copy()
-        n_samples = df.shape[0]
+        n_samples = df.doc_id.unique().shape[0]
 
         test_size = int(test_size * n_samples)
         if val_size:
@@ -407,14 +407,25 @@ class DataProcessor:
         test_ids = ids[:test_size]
         train_ids = ids[test_size:]
 
-        dfs['test'] = df.loc[test_ids]
+        doc_ids_test = df.doc_id.unique()[test_ids]
+        doc_ids_train = df.doc_id.unique()[train_ids]
+
+        df_test = df[df.doc_id.isin(doc_ids_test)]
+        df_train = df[df.doc_id.isin(doc_ids_train)]
+
+
+        # TODO val size based on old, broken
+        '''dfs['test'] = df.loc[test_ids]
 
         if val_size:
             val_ids = train_ids[:val_size]
             train_ids = train_ids[val_size:]
             dfs['val'] = df.loc[val_ids]
 
-        dfs['train'] = df.loc[train_ids]
+        dfs['train'] = df.loc[train_ids]'''
+
+        dfs['test'] = df_test
+        dfs['train'] = df_train
 
         return dfs
 
