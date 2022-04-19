@@ -4,8 +4,19 @@ info:
   title: ArgMiner
 
 paths:
+  /model_info:
+    get:
+      tags:
+        - model_info
+      operationId: argminer.api.views.model_info
+      parameters:
+        - $ref: '#/components/parameters/OurModels'
+      summary: get summary information about model
+      responses:
+        200:
+          $ref: '#/components/schemas/ModelInfoResponse'
   /health_check:
-    post:
+    get:
       tags:
         - health_check
       operationId: argminer.api.views.health_check
@@ -21,6 +32,7 @@ paths:
       tags:
         - evaluate
       operationId: argminer.api.views.evaluate
+      summary: Evaluates models on a given test set
       parameters:
         - $ref: '#/components/parameters/ModelName'
         - $ref: '#/components/parameters/LabellingStrategy'
@@ -52,10 +64,19 @@ paths:
       tags:
         - predict
       operationId: argminer.api.views.predict
-      summary: No idea
+      summary: Predicts labels on a given sample of text
+      parameters:
+        - $ref: '#/components/parameters/OurModels'
+        - $ref: '#/components/parameters/MaxLength'
+      requestBody:
+        $ref: '#/components/requestBodies/FreeText'
       responses:
         200:
-          description: No idea
+          description: Successfully predicted on a piece of text
+          content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/PredictionResponse'
 components:
   requestBodies:
     TextSegments:
@@ -63,8 +84,18 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/TextSegments'
+    FreeText:
+      content:
+        text/plain:
+          schema:
+            type: string
 
   parameters:
+    OurModels:
+      name: model_name
+      in: query
+      schema:
+        $ref: '#/components/schemas/OurModels'
     Dataset:
       name: dataset_name
       in: query
@@ -203,7 +234,21 @@ components:
 
         score_table:
           type: string
+    OurModels:
+      type: string
+      enum: [ucabqfe/roberta_AAE_bieo, ucabqfe/roberta_AAE_bio, ucabqfe/roberta_AAE_io, ucabqfe/roberta_PER_bieo, ucabqfe/roberta_PER_bio, ucabqfe/roberta_PER_io, ucabqfe/bigBird_AAE_bieo, ucabqfe/bigBird_AAE_bio, ucabqfe/bigBird_AAE_io, ucabqfe/bigBird_PER_bieo, ucabqfe/bigBird_PER_bio, ucabqfe/bigBird_PER_io]
+      default: ucabqfe/roberta_AAE_bieo
 
+    ModelInfoResponse:
+      type: object
+      properties:
+        hugging_face_model_name:
+          type: string
+          description: name of base model used for training
+        labels:
+          type: string
+    PredictionResponse:
+      type: object
 
 
 #definitions:

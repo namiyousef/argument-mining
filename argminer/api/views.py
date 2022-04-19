@@ -1,9 +1,9 @@
 from transformers import AutoModelForTokenClassification, AutoTokenizer
-
+import torch
 from argminer.data import ArgumentMiningDataset, PersuadeProcessor, TUDarmstadtProcessor
 from argminer.api.utils import _generate_df_text_from_input
-
-from argminer.config import  MODEL_MAP_DICT
+import pandas as pd
+from argminer.config import  MODEL_MAP_DICT, LABELS_MAP_DICT
 from argminer.utils import _get_label_maps
 
 from argminer.evaluation import inference, _get_scores_agg
@@ -43,7 +43,7 @@ def evaluate(body, model_name, strategy, agg_strategy, strategy_level, max_lengt
 
         try:
             model = AutoModelForTokenClassification.from_pretrained(model_name)
-            tokenizer_name = model.__dict__['name_or_path']
+            tokenizer_name = MODEL_MAP_DICT[model_name]['hugging_face_model_name']
         except:
             return dict(
                 typr='model',
@@ -93,5 +93,49 @@ def evaluate(body, model_name, strategy, agg_strategy, strategy_level, max_lengt
 
     return {'score_table': df_scores_agg.to_string().split('\n'), 'metrics':scores}, 200
 
-def predict():
-    return 'OK'
+def predict(body, model_name, max_length):
+
+    dataset_name = MODEL_MAP_DICT[model_name].get('dataset')
+    strategy = model_name.split('_')[-1]
+    df_label_map = LABELS_MAP_DICT[dataset_name][strategy]
+
+    df_text = _generate_df_text_from_input([[f'Claim::{body}']], strategy)
+
+
+    model = AutoModelForTokenClassification.from_pretrained(model_name)
+    tokenizer_name = MODEL_MAP_DICT[model_name]['hugging_face_model_name']
+
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, add_prefix_space=True)
+
+
+
+    fake_dataset = ArgumentMiningDataset(df_label_map, df_text, tokenizer, max_length, f'standard_{strategy}', is_train=False)
+    fake_loader = DataLoader(fake_dataset)
+    df_metrics, df_scores, target_labels_full = inference(model, fake_loader, return_labels=True)
+
+    unique_labels = {}
+    labels = []
+    for label in df_label_map.label.values:
+        if label != 'O':
+            label = label.split('-')[-1]
+        if label not in unique_labels:
+            unique_labels.add(label)
+            labels.append(label)
+    df_return = pd.DataFrame().from_records(
+        [(word, labels[label.item()]) for word, label in zip(body.split(), target_labels_full[0])]
+    )
+    return df_return.to_string().split('\n'), 200
+
+
+def model_info(model_name):
+    dataset_name = MODEL_MAP_DICT[model_name].get('dataset')
+    strategy = model_name.split('_')[-1]
+
+    hugging_face_model_name = MODEL_MAP_DICT[model_name].get('hugging_face_model_name')
+    df_label_map = LABELS_MAP_DICT[dataset_name][strategy]
+
+    return dict(
+        hugging_face_model_name=hugging_face_model_name,
+        labels=df_label_map.to_string().split('\n')
+    ),
+    200
