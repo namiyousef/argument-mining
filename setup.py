@@ -18,7 +18,7 @@ def get_version(rel_path):
 setup(
     name='argminer',
     version=get_version("argminer/__init__.py"), #'0.0.12',
-    description='',
+    description='A package for processing SOTA argument mining datasets',
     author='Yousef Nami',
     author_email='namiyousef@hotmail.com',
     url='https://github.com/namiyousef/argument-mining',
@@ -34,13 +34,14 @@ setup(
         'protobuf',
         'colab-dev-tools',
         'matplotlib',
-        #'colab-dev-tools@git+https://git@github.com/namiyousef/colab-utils.git',
-        'mlutils@git+https://git@github.com/namiyousef/ml-utils.git@develop',
+        'ml-dev-tools',
         'connexion[swagger-ui]'
         #'pip install torch==1.7.1+cu101 torchvision==0.8.2+cu101 torchaudio==0.7.2 -f https://download.pytorch.org/whl/torch_stable.html'
     ],
     #package_data={}
     packages=find_packages(exclude=('tests*', 'experiments*')),
+    package_data={'': ['api/specs/api.yaml']},
+    include_package_data=True,
     license='MIT',
     entry_points={
         'console_scripts': ['argminer-api=argminer.run_api:main'],

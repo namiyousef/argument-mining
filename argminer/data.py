@@ -333,6 +333,51 @@ class DataProcessor:
         self.status = None
         self.dataframe = None
 
+    def _process(self, strategy, processors=[]):
+
+        df = self.dataframe.copy()
+
+        for processor in processors:
+            df['text'] = df['text'].apply(processor)
+
+            # add predStr
+        df = get_predStr(df)  # TODO double check start pred string here
+
+        # add labelling strategy
+        label_strat = dict(
+            add_end='e' in strategy,
+            add_beg='b' in strategy
+        )
+        df['label'] = df[['label', 'predictionString']].apply(
+            lambda x: _generate_entity_labels(
+                len(x['predictionString']), x['label'], **label_strat
+            ), axis=1
+        )
+
+        self.dataframe = df
+        self.status = 'processed'
+
+        return self
+
+    def _postprocess(self):
+
+        df = self.dataframe.copy()
+
+        df = df.groupby('doc_id').agg({
+            'text': lambda x: ' '.join(x),
+            'predictionString': 'sum',
+            'label': 'sum'
+        })
+
+        df = df.reset_index().rename(columns={'label': 'labels'})[['text', 'labels']]
+
+        self.dataframe = df
+        self.status = 'postprocessed'
+
+        return self
+
+
+
     @property
     def preprocess(self):
         """ This is pretokenisation cleaning / what is done at reading"""
@@ -361,13 +406,14 @@ class DataProcessor:
         return self._postprocess
 
 
-    def from_json(self, status='postprocessed'):
-
+    def from_json(self, status='postprocessed', df=None):
         assert status in {'preprocessed', 'processed', 'postprocessed'}
-        filename = f'{self.__class__.__name__.split("Processor")[0]}_{status}.json'
-        path = os.path.join(self.path, filename)
 
-        df = pd.read_json(path)
+        if df is None:
+            filename = f'{self.__class__.__name__.split("Processor")[0]}_{status}.json'
+            path = os.path.join(self.path, filename)
+
+            df = pd.read_json(path)
 
         self.dataframe = df
         self.status = status
@@ -391,7 +437,7 @@ class DataProcessor:
         # TODO need to add a fixed seed here...
         # TODO test and val sizes relative to initial dataset
         df = self.dataframe.copy()
-        n_samples = df.shape[0]
+        n_samples = df.doc_id.unique().shape[0]
 
         test_size = int(test_size * n_samples)
         if val_size:
@@ -407,14 +453,25 @@ class DataProcessor:
         test_ids = ids[:test_size]
         train_ids = ids[test_size:]
 
-        dfs['test'] = df.loc[test_ids]
+        doc_ids_test = df.doc_id.unique()[test_ids]
+        doc_ids_train = df.doc_id.unique()[train_ids]
+
+        df_test = df[df.doc_id.isin(doc_ids_test)]
+        df_train = df[df.doc_id.isin(doc_ids_train)]
+
+
+        # TODO val size based on old, broken
+        '''dfs['test'] = df.loc[test_ids]
 
         if val_size:
             val_ids = train_ids[:val_size]
             train_ids = train_ids[val_size:]
             dfs['val'] = df.loc[val_ids]
 
-        dfs['train'] = df.loc[train_ids]
+        dfs['train'] = df.loc[train_ids]'''
+
+        dfs['test'] = df_test
+        dfs['train'] = df_train
 
         return dfs
 
@@ -725,6 +782,7 @@ class PersuadeProcessor(DataProcessor):
         else:
             df_dict = self.get_tts(**split_params)
             df = df_dict[split]
+            print('After split: ', df.shape)
             warnings.warn(f'Getting data for split={split} with params {split_params}', UserWarning, stacklevel=2)
 
 
@@ -746,15 +804,22 @@ class PersuadeProcessor(DataProcessor):
                 len(x['predictionString']), x['label'], **label_strat
             ), axis=1
         )
+        print('before save in process: ', df.shape)
 
         self.dataframe = df
+        print('after save in process: ', df.shape)
+
         self.status = 'processed'
 
 
         return self
     
     def _postprocess(self):
+        print('before load in postprocess: ', self.dataframe.shape)
+
         df_post = self.dataframe.copy()
+        print('after load in postprocess: ', df_post.shape)
+
         df_post = df_post.groupby('doc_id').agg({
             'text':lambda x: ' '.join(x),
             'predictionString': 'sum',
@@ -762,8 +827,12 @@ class PersuadeProcessor(DataProcessor):
         }).reset_index()
         
         df_post = df_post.rename(columns={'label':'labels'})
- 
+
+        print('before save in postprocess: ', df_post.shape)
+
         self.dataframe = df_post
+        print('after save in postprocess: ', self.dataframe.shape)
+
         self.status = 'postprocessed'
 
         return self
@@ -888,16 +957,18 @@ def create_labels_doc_level(
     return df_texts
 
 if __name__ == '__main__':
-    processor = TUDarmstadtProcessor('../data/UCL/dataset2/ArgumentAnnotatedEssays-2.0')
-    processor = processor.preprocess().process('bio', split='test').postprocess()
-    df_test = processor.dataframe
 
-    processor = TUDarmstadtProcessor('../data/UCL/dataset2/ArgumentAnnotatedEssays-2.0')
-    processor = processor.preprocess().process('bio').postprocess()
-    df_test_new = processor.get_tts()['test']
+    processor = DataProcessor('test').preprocess()
 
-    from pandas.testing import assert_frame_equal
-    assert_frame_equal(df_test_new.reset_index(drop=True),
-                       df_test.reset_index(drop=True))
+    #processor = processor.preprocess().process('bio', split='test').postprocess()
+    #df_test = processor.dataframe
+
+    #processor = TUDarmstadtProcessor('../data/UCL/dataset2/ArgumentAnnotatedEssays-2.0')
+    #processor = processor.preprocess().process('bio').postprocess()
+    #df_test_new = processor.get_tts()['test']
+
+    #from pandas.testing import assert_frame_equal
+    #assert_frame_equal(df_test_new.reset_index(drop=True),
+    #                   df_test.reset_index(drop=True))
 
 

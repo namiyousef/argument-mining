@@ -1,0 +1,265 @@
+openapi: 3.0.5
+info:
+  version: 0.0.1
+  title: ArgMiner
+
+paths:
+  /model_info:
+    get:
+      tags:
+        - model_info
+      operationId: argminer.api.views.model_info
+      parameters:
+        - $ref: '#/components/parameters/OurModels'
+      summary: get summary information about model
+      responses:
+        200:
+          $ref: '#/components/schemas/ModelInfoResponse'
+  /health_check:
+    get:
+      tags:
+        - health_check
+      operationId: argminer.api.views.health_check
+      summary: Check API alive
+      responses:
+        200:
+          description: 'Checks to see if API is alive'
+          #$ref: '#/components/responses/Success'
+        #500:
+        #  $ref: '#/components/responses/InternalServerError
+  /evaluate:
+    post:
+      tags:
+        - evaluate
+      operationId: argminer.api.views.evaluate
+      summary: Evaluates models on a given test set
+      parameters:
+        - $ref: '#/components/parameters/ModelName'
+        - $ref: '#/components/parameters/LabellingStrategy'
+        - $ref: '#/components/parameters/AggregationStrategy'
+        - $ref: '#/components/parameters/LabellingStrategyScope'
+        - $ref: '#/components/parameters/MaxLength'
+        - $ref: '#/components/parameters/BatchSize'
+        - $ref: '#/components/parameters/Labels'
+        #- $ref: '#/components/parameters/TextSegments'
+      requestBody:
+        $ref: '#/components/requestBodies/TextSegments'
+      responses:
+            200:
+              description: Successfully evaluated on test dataset
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/InferenceResponse'
+            404:
+              description: HuggingFace retrieve error
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/HuggingFaceError'
+
+
+  /predict:
+    post:
+      tags:
+        - predict
+      operationId: argminer.api.views.predict
+      summary: Predicts labels on a given sample of text
+      parameters:
+        - $ref: '#/components/parameters/OurModels'
+      requestBody:
+        $ref: '#/components/requestBodies/FreeText'
+      responses:
+        200:
+          description: Successfully predicted on a piece of text
+          content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/PredictionResponse'
+components:
+  requestBodies:
+    TextSegments:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/TextSegments'
+    FreeText:
+      content:
+        text/plain:
+          schema:
+            type: string
+
+  parameters:
+    OurModels:
+      name: model_name
+      in: query
+      schema:
+        $ref: '#/components/schemas/OurModels'
+    Dataset:
+      name: dataset_name
+      in: query
+      schema:
+        $ref: '#/components/schemas/Dataset'
+    LabellingStrategy:
+      name: strategy
+      in: query
+      schema:
+        $ref: '#/components/schemas/LabellingStrategy'
+    AggregationStrategy:
+      name: agg_strategy
+      in: query
+      schema:
+        $ref: '#/components/schemas/AggregationStrategy'
+    ModelName:
+      name: model_name
+      in: query
+      schema:
+        $ref: '#/components/schemas/ModelName'
+      examples:
+        Ours:
+          value: ucabqfe/roberta_PER_io
+          summary: roberta on PERSUADE with io label
+        HuggingFace: # Distinct name
+          value: google/bigbird-roberta-base
+          summary: Official Bigbird model from HuggingFace
+    LabellingStrategyScope:
+      name: strategy_level
+      in: query
+      schema:
+        $ref: '#/components/schemas/LabellingStrategyScope'
+    MaxLength:
+      name: max_length
+      in: query
+      schema:
+        $ref: '#/components/schemas/MaxLength'
+    BatchSize:
+      name: batch_size
+      in: query
+      schema:
+        $ref: '#/components/schemas/BatchSize'
+    Labels:
+      name: label_map
+      in: query
+      schema:
+        $ref: '#/components/schemas/Labels'
+    TextSegments:
+      name: text_segments
+      in: query
+      schema:
+        $ref: '#/components/schemas/TextSegments'
+      explode: true
+
+  schemas:
+    Dataset:
+      type: string
+      example: AAE
+      nullable: false
+      enum: [AAE, PERSUADE]
+      description: Name of the dataset
+    LabellingStrategy:
+      type: string
+      example: io
+      enum: [io, bio, bieo, bixo]
+      nullable: false
+      description: Strategy to label words in a given text segment
+    AggregationStrategy:
+      type: string
+      example: first
+      enum: [first, mean, max]
+      nullable: false
+      description: aggregation strategy for mapping back from tokens to words
+    ModelName:
+      type: string
+      example: google/bigbird-roberta-base
+      nullable: false
+      description: name of the model to use. Can be any generic one from HuggingFace or one of our models
+    LabellingStrategyScope:
+      type: string
+      nullable: false
+      enum: [standard, wordLevel]
+      default: standard
+      description: level to apply labelling strategy at. If standard then inside subtokens labelled as I-.
+    MaxLength:
+      type: integer
+      nullable: false
+      default: 512
+      description: maximum number of tokens per passage
+    BatchSize:
+      type: integer
+      nullable: false
+      default: 32
+      description: batch size for inference
+    Labels:
+      type: array
+      items:
+        type: string
+        example: Other
+        uniqueItems: true
+
+      description: Labels present in data
+    TextSegments:
+      type: array
+      items:
+        type: array
+        items:
+          type: string
+          example: "Claim:: NLP is the best ML field!"
+
+    HuggingFaceError:
+      type: object
+      properties:
+        type:
+          type: string
+          example: tokenizer
+        name:
+          type: string
+          example: model
+        error:
+          type: string
+
+    DimensionMismatchError:
+      type: object
+      properties:
+        error:
+          type: string
+        expected:
+          type: string
+        received:
+          type: string
+
+    InferenceResponse:
+      type: object
+      properties:
+
+        score_table:
+          type: string
+    OurModels:
+      type: string
+      enum: [ucabqfe/roberta_AAE_bieo, ucabqfe/roberta_AAE_bio, ucabqfe/roberta_AAE_io, ucabqfe/roberta_PER_bieo, ucabqfe/roberta_PER_bio, ucabqfe/roberta_PER_io, ucabqfe/bigBird_AAE_bieo, ucabqfe/bigBird_AAE_bio, ucabqfe/bigBird_AAE_io, ucabqfe/bigBird_PER_bieo, ucabqfe/bigBird_PER_bio, ucabqfe/bigBird_PER_io]
+      default: ucabqfe/roberta_AAE_bieo
+
+    ModelInfoResponse:
+      type: object
+      properties:
+        hugging_face_model_name:
+          type: string
+          description: name of base model used for training
+        labels:
+          type: string
+    PredictionResponse:
+      type: object
+
+
+#definitions:
+#  User:
+#    type: object
+#    properties:
+#      id:
+#        type: integer
+#        description: The user ID.
+#      username:
+#        type: string
+#        description: The user name.
+
+
+
