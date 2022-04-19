@@ -41,6 +41,8 @@ setup(
     ],
     #package_data={}
     packages=find_packages(exclude=('tests*', 'experiments*')),
+    package_data={'': ['api/specs/api.yaml']},
+    include_package_data=True,
     license='MIT',
     entry_points={
         'console_scripts': ['argminer-api=argminer.run_api:main'],
