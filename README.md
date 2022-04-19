@@ -97,6 +97,24 @@ The DataProcessor is designed such that it allows easy
 
 # Quick Start
 
+## Web API
+
+After installing with `pip` create a new virtual environment and activate it:
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+Then run the following command to launch the Web API.
+```bash
+argminer-api
+```
+
+Note that this requires your port `8080` to be free.
+
+
+## Development Kit
+
 A quick start showing how to use the DataProcessor for the AAE dataset.
 ```python
 from argminer.data import ArgumentMiningDataset, TUDarmstadtProcessor
