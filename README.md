@@ -31,7 +31,7 @@ Datasets in the field of argument mining are stored in completely different form
 
 The data processing API provides a standard method of processing these datasets end-to-end to enable fast and consistent experimentation and modelling.
 
-- ADD DIAGRAM
+<img width="1665" alt="EndToEnd_bw" src="https://user-images.githubusercontent.com/64047828/163906308-c1fef74e-141c-4e09-8e13-01c8be0ef625.png">
 
 ### Labelling Strategies
 
