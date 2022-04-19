@@ -40,18 +40,19 @@ MODEL_MAP_DICT = {
     'ucabqfe/bigBird_PER_io': dict(
         dataset='Persuade',
         hugging_face_model_name="google/bigbird-roberta-base",
+        max_length=1024,
         num_labels=8
     ),
     'ucabqfe/bigBird_PER_bio': dict(
         dataset='Persuade',
         hugging_face_model_name="google/bigbird-roberta-base",
-
+        max_length=1024,
         num_labels=15
     ),
     'ucabqfe/bigBird_PER_bieo': dict(
         dataset='Persuade',
         hugging_face_model_name="google/bigbird-roberta-base",
-
+        max_length=1024,
         num_labels=22
     ),
     'ucabqfe/bigBird_AAE_io': dict(
@@ -63,37 +64,37 @@ MODEL_MAP_DICT = {
     'ucabqfe/bigBird_AAE_bio': dict(
         dataset='TUDarmstadt',
         hugging_face_model_name="google/bigbird-roberta-base",
-
+        max_length=1024,
         num_labels=7
     ),
     'ucabqfe/bigBird_AAE_bieo': dict(
         dataset='TUDarmstadt',
         hugging_face_model_name="google/bigbird-roberta-base",
-
+        max_length=1024,
         num_labels=10
     ),
     'ucabqfe/roberta_PER_io': dict(
         dataset='Persuade',
         hugging_face_model_name="roberta-base",
-
+        max_length=512,
         num_labels=8
     ),
     'ucabqfe/roberta_PER_bio': dict(
         dataset='Persuade',
         hugging_face_model_name="roberta-base",
-
+        max_length=512,
         num_labels=15
     ),
     'ucabqfe/roberta_PER_bieo': dict(
         dataset='Persuade',
         hugging_face_model_name="roberta-base",
-
+        max_length=512,
         num_labels=22
     ),
     'ucabqfe/roberta_AAE_io': dict(
         dataset='TUDarmstadt',
         hugging_face_model_name="roberta-base",
-
+        max_length=512,
         num_labels=4
     ),
     'ucabqfe/roberta_AAE_bio': dict(
@@ -105,7 +106,7 @@ MODEL_MAP_DICT = {
     'ucabqfe/roberta_AAE_bieo': dict(
         dataset='TUDarmstadt',
         hugging_face_model_name="roberta-base",
-
+        max_length=512,
         num_labels=10
     ),
 

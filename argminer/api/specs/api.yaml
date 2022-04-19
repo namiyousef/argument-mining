@@ -67,7 +67,6 @@ paths:
       summary: Predicts labels on a given sample of text
       parameters:
         - $ref: '#/components/parameters/OurModels'
-        - $ref: '#/components/parameters/MaxLength'
       requestBody:
         $ref: '#/components/requestBodies/FreeText'
       responses:
@@ -166,7 +165,7 @@ components:
     AggregationStrategy:
       type: string
       example: first
-      enum: [first, sum]
+      enum: [first, mean, max]
       nullable: false
       description: aggregation strategy for mapping back from tokens to words
     ModelName:

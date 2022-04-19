@@ -93,12 +93,12 @@ def evaluate(body, model_name, strategy, agg_strategy, strategy_level, max_lengt
 
     return {'score_table': df_scores_agg.to_string().split('\n'), 'metrics':scores}, 200
 
-def predict(body, model_name, max_length):
+def predict(body, model_name):
 
     dataset_name = MODEL_MAP_DICT[model_name].get('dataset')
+    max_length = MODEL_MAP_DICT[model_name].get('max_length')
     strategy = model_name.split('_')[-1]
     df_label_map = LABELS_MAP_DICT[dataset_name][strategy]
-
     df_text = _generate_df_text_from_input([[f'Claim::{body}']], strategy)
 
 
