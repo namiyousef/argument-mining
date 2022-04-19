@@ -113,7 +113,7 @@ def predict(body, model_name, max_length):
     fake_loader = DataLoader(fake_dataset)
     df_metrics, df_scores, target_labels_full = inference(model, fake_loader, return_labels=True)
 
-    unique_labels = {}
+    unique_labels = set()
     labels = []
     for label in df_label_map.label.values:
         if label != 'O':
@@ -122,7 +122,8 @@ def predict(body, model_name, max_length):
             unique_labels.add(label)
             labels.append(label)
     df_return = pd.DataFrame().from_records(
-        [(word, labels[label.item()]) for word, label in zip(body.split(), target_labels_full[0])]
+        [(word, labels[label.item()]) for word, label in zip(body.split(), target_labels_full[0])],
+        columns=['word', 'label']
     )
     return df_return.to_string().split('\n'), 200
 
